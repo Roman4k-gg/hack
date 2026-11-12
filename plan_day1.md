@@ -69,11 +69,11 @@
 
 ### P0
 
-- [ ] **K-01** Согласовать с Машей файлы и SSE-схему
-- [ ] **K-02** Сделать компоненты чата на моках: `MessageList`, `MessageBubble`, `Composer`, `StreamingIndicator`, `ToolCallCard`, `CitationChip`
-- [ ] **K-03** Написать `useChatStream`: fetch + `ReadableStream`, парсер SSE
-- [ ] **K-04** Сделать Zustand `chatStore` и Zod-схемы событий
-- [ ] **K-05** Сделать мок-поток и состояния: empty, loading, streaming, error, retry, stop
+- [x] **K-01** Согласовать с Машей файлы и SSE-схему
+- [x] **K-02** Сделать компоненты чата на моках: `MessageList`, `MessageBubble`, `Composer`, `StreamingIndicator`, `ToolCallCard`, `CitationChip`
+- [x] **K-03** Написать `useChatStream`: fetch + `ReadableStream`, парсер SSE
+- [x] **K-04** Сделать Zustand `chatStore` и Zod-схемы событий
+- [x] **K-05** Сделать мок-поток и состояния: empty, loading, streaming, error, retry, stop
 - [ ] **K-06** Подключить реальный `/api/v1/chat/stream` через Vite proxy
 - [ ] **K-07** Добавить UX: автопрокрутка, markdown, code blocks, цитаты, tool card
 - [ ] **K-08** Написать Vitest на парсер/стор и Playwright smoke
@@ -90,7 +90,7 @@
 
 ### P0
 
-- [ ] **M-01** Скаффолд `web/`: Vite + React + TS, Tailwind, shadcn/ui, TanStack Router/Query, Zustand, Zod, ESLint/Prettier
+- [x] **M-01** Скаффолд `web/`: Vite + React + TS, Tailwind, shadcn/ui, TanStack Router/Query, Zustand, Zod, ESLint/Prettier
 - [ ] **M-02** Сделать дизайн-токены и app shell: sidebar, header, layout
 - [ ] **M-03** Сделать логин, protected route, auth-store и dev role switcher
 - [ ] **M-04** Сделать экран карты на моках: этапы, пункты, статусы, прогресс, блокеры, следующий шаг

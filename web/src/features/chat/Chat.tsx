@@ -1,35 +1,70 @@
-import { useState } from 'react';
-import type { ChatMessage } from './types';
+import { useChatStore } from './chatStore';
+import { useMockChat } from './hooks/useMockChat.ts';
 import { MessageList } from './components/MessageList';
 import { Composer } from './components/Composer';
 import { StreamingIndicator } from './components/StreamingIndicator';
 import './chat.css';
 
-const initialMessages: ChatMessage[] = [
-    {
-        id: '1',
-        role: 'assistant',
-        content: 'Привет! Я AI-buddy. Чем могу помочь?',
-    },
-];
-
 export function Chat() {
-    const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
+    const messages = useChatStore((state) => state.messages);
+    const status = useChatStore((state) => state.status);
+    const error = useChatStore((state) => state.error);
+    const { send, stop, retry } = useMockChat();
 
-    function handleSend(content: string) {
-        const newMessage: ChatMessage = {
-            id: crypto.randomUUID(),
-            role: 'user',
-            content,
-        };
+    const busy = status === 'loading' || status === 'streaming';
 
-        setMessages((previous) => [...previous, newMessage]);
-    }
+    const visibleMessages = messages.filter(
+        (message) =>
+            message.content ||
+            message.toolCalls?.length ||
+            message.citations?.length,
+    );
 
     return (
         <section className="chat">
-            <MessageList messages={messages} />
-            <Composer onSend={handleSend} />
+            {messages.length === 0 ? (
+                <div className="chat__empty">
+                    <h2>Привет! Я AI-buddy</h2>
+                    <p>Задай вопрос об адаптации или задачах на сегодня.</p>
+                </div>
+            ) : (
+                <MessageList messages={visibleMessages} />
+            )}
+
+            {status === 'loading' && (
+                <div className="streaming-indicator" role="status">
+                    AI-buddy готовит ответ…
+                </div>
+            )}
+
+            {status === 'streaming' && <StreamingIndicator />}
+
+            {status === 'error' && (
+                <div className="chat__error" role="alert">
+                    <span>{error}</span>
+                    <button
+                        type="button"
+                        className="composer__button"
+                        onClick={retry}
+                    >
+                        Повторить
+                    </button>
+                </div>
+            )}
+
+            {busy && (
+                <div className="chat__actions">
+                    <button
+                        type="button"
+                        className="composer__button"
+                        onClick={stop}
+                    >
+                        Остановить
+                    </button>
+                </div>
+            )}
+
+            <Composer onSend={send} disabled={busy} />
         </section>
     );
 }

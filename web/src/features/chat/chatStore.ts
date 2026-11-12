@@ -16,13 +16,7 @@ interface ChatState {
 }
 
 export const useChatStore = create<ChatState>((set) => ({
-    messages: [
-        {
-            id: 'welcome',
-            role: 'assistant',
-            content: 'Привет! Я AI-buddy. Чем могу помочь?',
-        },
-    ],
+    messages: [],
     status: 'idle',
     error: null,
     activeMessageId: null,
