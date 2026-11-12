@@ -35,6 +35,11 @@ func main() {
 	}
 	defer store.Close()
 
+	if err := store.Migrate(ctx); err != nil {
+		logger.Error("cannot apply migrations", "error", err.Error())
+		os.Exit(1)
+	}
+
 	cache, err := redis.New(ctx, cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
 	if err != nil {
 		logger.Error("cannot create redis client", "error", err.Error())

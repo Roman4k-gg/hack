@@ -25,7 +25,7 @@
 ### P0
 
 - [X] **R-01** Создать каркас `core/`, `docker-compose.yml`, `.env.example`, `Makefile`, healthchecks
-- [ ] **R-02** Поднять PostgreSQL + Redis, написать миграции и seed
+- [X] **R-02** Поднять PostgreSQL + Redis, написать миграции и seed
 - [ ] **R-03** Сделать mock-логин, JWT, `GET /api/v1/me`
 - [ ] **R-04** Сделать RBAC middleware, скоупы и тесты на доступ
 - [ ] **R-05** Сделать `GET /api/v1/onboarding/plan` с этапами, пунктами и `next_step`
