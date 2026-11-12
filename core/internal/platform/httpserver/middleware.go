@@ -60,7 +60,7 @@ func AccessLog(logger interface {
 
 			logger.Info("request",
 				"trace_id", reqctx.TraceID(r.Context()),
-				"user_id", reqctx.UserID(r.Context()),
+				"user_id", rec.userID,
 				"method", r.Method,
 				"route", routePattern(r),
 				"status", rec.status,
@@ -106,6 +106,13 @@ type statusRecorder struct {
 	http.ResponseWriter
 	status  int
 	written bool
+	userID  string
+}
+
+func (r *statusRecorder) SetUserID(id string) {
+	if r.userID == "" {
+		r.userID = id
+	}
 }
 
 func (r *statusRecorder) WriteHeader(status int) {

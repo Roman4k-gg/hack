@@ -29,6 +29,7 @@ func TestLoadUsesDefaults(t *testing.T) {
 	require.Equal(t, 5, cfg.RateLimitRPS)
 	require.Equal(t, 300*time.Second, cfg.ConfirmationTTL)
 	require.Equal(t, 8*time.Hour, cfg.JWTTTL)
+	require.Equal(t, "ai-buddy-core", cfg.JWTIssuer)
 }
 
 func TestLoadParsesOverrides(t *testing.T) {
@@ -57,4 +58,29 @@ func TestLoadRejectsUnknownIntegrationsMode(t *testing.T) {
 func TestAllowsAnyOrigin(t *testing.T) {
 	require.True(t, Config{CORSAllowedOrigins: []string{"*"}}.AllowsAnyOrigin())
 	require.False(t, Config{CORSAllowedOrigins: []string{"http://localhost:3000"}}.AllowsAnyOrigin())
+}
+
+func TestLoadRejectsDefaultJWTSecretInRealMode(t *testing.T) {
+	t.Setenv("POSTGRES_DSN", "postgres://buddy:buddy@localhost:5432/buddy")
+	t.Setenv("INTEGRATIONS_MODE", "real")
+	t.Setenv("JWT_SECRET", "dev-secret-change-me")
+
+	_, err := Load()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "JWT_SECRET")
+
+	t.Setenv("JWT_SECRET", "production-secret")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, "production-secret", cfg.JWTSecret)
+}
+
+func TestLoadRejectsInvalidJWTIssuer(t *testing.T) {
+	t.Setenv("POSTGRES_DSN", "postgres://buddy:buddy@localhost:5432/buddy")
+	t.Setenv("JWT_ISSUER", "")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, "ai-buddy-core", cfg.JWTIssuer)
 }
