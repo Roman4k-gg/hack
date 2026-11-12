@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { cn } from '@/lib/utils';
 import { fetchPlan } from './api';
 import type { Plan } from './types';
@@ -18,7 +20,7 @@ export function OnboardingMap() {
   });
 
   if (isPending) {
-    return <p className="text-muted">Загружаем карту…</p>;
+    return <MapSkeleton />;
   }
 
   if (isError) {
@@ -38,7 +40,33 @@ export function OnboardingMap() {
   return <PlanView plan={data} />;
 }
 
+function MapSkeleton() {
+  return (
+    <div role="status" aria-label="Загружаем карту">
+      <Skeleton className="h-4 w-24" />
+      <Skeleton className="mt-3 h-9 w-64" />
+      <div className="mt-6 flex flex-col gap-5 lg:flex-row">
+        <Skeleton className="h-36 lg:flex-[2]" />
+        <Skeleton className="h-36 lg:flex-1" />
+      </div>
+      <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((index) => (
+          <Skeleton key={index} className="h-72" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PlanView({ plan }: { plan: Plan }) {
+  if (plan.stages.length === 0) {
+    return (
+      <EmptyState
+        title="План онбординга пока не назначен"
+        text="Как только HR или наставник подготовят план, он появится здесь."
+      />
+    );
+  }
   const firstName = plan.intern.full_name.split(' ')[0];
 
   return (

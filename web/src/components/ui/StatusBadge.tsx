@@ -13,7 +13,12 @@ export function StatusBadge({ status }: { status: ItemStatus }) {
   const view = statusView[status];
 
   return (
-    <span className={cn('inline-block px-2 py-0.5 text-[11px] font-bold', view.className)}>
+    <span
+      className={cn(
+        'inline-block px-2 py-0.5 text-[11px] font-bold',
+        view.className,
+      )}
+    >
       {view.label}
     </span>
   );
