@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { StatusBadge } from '@/components/ui/StatusBadge';
 import { cn } from '@/lib/utils';
 import { fetchPlan } from './api';
 import type { Plan } from './types';
@@ -67,13 +67,14 @@ function PlanView({ plan }: { plan: Plan }) {
       />
     );
   }
+
   const firstName = plan.intern.full_name.split(' ')[0];
 
   return (
     <section>
       <p className="text-xs text-muted">Команда {plan.intern.team_name}</p>
       <h1 className="mt-1 text-3xl font-extrabold tracking-tight">
-        Привет, {firstName}
+        Привет, {firstName}!
       </h1>
 
       <div className="mt-6 flex flex-col gap-5 lg:flex-row">
@@ -111,21 +112,24 @@ function PlanView({ plan }: { plan: Plan }) {
                 <li
                   key={item.id}
                   className={cn(
-                    'bg-paper p-3',
+                    'flex min-h-[8rem] flex-col bg-paper p-3',
                     item.status === 'blocked' && 'border-l-4 border-alert',
                   )}
                 >
                   <p className="text-sm font-medium leading-snug">
                     {item.title}
                   </p>
-                  <div className="mt-2">
+                  <p className="mt-1 line-clamp-2 text-xs text-muted">
+                    {item.description}
+                  </p>
+                  <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-2">
                     <StatusBadge status={item.status} />
+                    {item.status === 'blocked' && item.blocked_reason && (
+                      <span className="text-xs text-muted">
+                        {item.blocked_reason}
+                      </span>
+                    )}
                   </div>
-                  {item.status === 'blocked' && item.blocked_reason && (
-                    <p className="mt-2 text-xs text-muted">
-                      {item.blocked_reason}
-                    </p>
-                  )}
                 </li>
               ))}
             </ul>

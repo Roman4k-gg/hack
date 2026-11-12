@@ -38,8 +38,8 @@ export function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-mist p-7">
-      <div className="w-full max-w-md bg-paper p-8">
-        <div className="flex items-center gap-3">
+      <div className="w-full max-w-lg bg-paper p-8 text-center">
+        <div className="flex items-center justify-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center bg-ink text-sm font-extrabold text-brand">
             AI
           </div>
@@ -47,11 +47,14 @@ export function LoginPage() {
         </div>
 
         <h1 className="mt-6 text-2xl font-extrabold tracking-tight">Вход</h1>
-        <p className="mt-1 text-sm text-muted">
+        <p className="mt-1 whitespace-nowrap text-sm text-muted">
           Введите рабочую почту, чтобы открыть карту онбординга.
         </p>
 
-        <form onSubmit={onSubmit} className="mt-5 flex flex-col gap-3">
+        <form
+          onSubmit={onSubmit}
+          className="mt-5 flex flex-col gap-3 text-left"
+        >
           <input
             type="email"
             value={email}
@@ -73,7 +76,7 @@ export function LoginPage() {
 
         <div className="mt-6 border-t border-line pt-4">
           <p className="text-xs font-bold text-muted">Демо-аккаунты</p>
-          <ul className="mt-2 flex flex-col gap-2">
+          <ul className="mt-2 flex flex-col gap-2 text-left">
             {demoUsers.map((user) => (
               <li key={user.id}>
                 <button

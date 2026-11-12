@@ -3,8 +3,8 @@ import { LogOut, MapIcon, MessageCircle } from 'lucide-react';
 import { useAuthStore } from '@/features/auth/authStore';
 
 const navItems = [
-  { to: '/map', label: 'Карта', icon: MapIcon },
-  { to: '/', label: 'Чат', icon: MessageCircle },
+  { to: '/map', label: 'Карта', icon: MapIcon, color: 'bg-brand' },
+  { to: '/', label: 'Чат', icon: MessageCircle, color: 'bg-azure' },
 ] as const;
 
 export function AppShell() {
@@ -25,16 +25,15 @@ export function AppShell() {
         </div>
 
         <nav className="mt-3 flex flex-col gap-3">
-          {navItems.map(({ to, label, icon: Icon }) => (
+          {navItems.map(({ to, label, icon: Icon, color }) => (
             <Link
               key={to}
               to={to}
               title={label}
               aria-label={label}
               activeOptions={{ exact: true }}
-              className="flex h-10 w-10 items-center justify-center"
-              activeProps={{ className: 'bg-brand text-ink' }}
-              inactiveProps={{ className: 'text-muted hover:bg-mist' }}
+              className={`flex h-10 w-10 items-center justify-center text-ink ${color}`}
+              activeProps={{ className: 'ring-2 ring-ink ring-offset-2' }}
             >
               <Icon size={22} aria-hidden="true" />
             </Link>
@@ -46,13 +45,13 @@ export function AppShell() {
           onClick={onLogout}
           title={user ? `Выйти (${user.full_name})` : 'Выйти'}
           aria-label="Выйти"
-          className="mt-auto flex h-10 w-10 items-center justify-center text-muted hover:bg-mist"
+          className="mt-auto flex h-10 w-10 items-center justify-center bg-mist text-muted hover:bg-line"
         >
           <LogOut size={22} aria-hidden="true" />
         </button>
       </aside>
 
-      <main className="min-w-0 flex-1 px-7 py-7">
+      <main className="flex min-w-0 flex-1 flex-col px-7 py-7">
         <Outlet />
       </main>
     </div>
