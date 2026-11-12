@@ -1,5 +1,6 @@
-import { Link, Outlet } from '@tanstack/react-router';
-import { MapIcon, MessageCircle } from 'lucide-react';
+import { Link, Outlet, useNavigate } from '@tanstack/react-router';
+import { LogOut, MapIcon, MessageCircle } from 'lucide-react';
+import { useAuthStore } from '@/features/auth/authStore';
 
 const navItems = [
   { to: '/map', label: 'Карта', icon: MapIcon },
@@ -7,6 +8,15 @@ const navItems = [
 ] as const;
 
 export function AppShell() {
+  const navigate = useNavigate();
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
+
+  function onLogout() {
+    logout();
+    void navigate({ to: '/login' });
+  }
+
   return (
     <div className="flex min-h-screen bg-paper">
       <aside className="flex w-16 flex-col items-center gap-3 border-r border-line py-4">
@@ -30,6 +40,16 @@ export function AppShell() {
             </Link>
           ))}
         </nav>
+
+        <button
+          type="button"
+          onClick={onLogout}
+          title={user ? `Выйти (${user.full_name})` : 'Выйти'}
+          aria-label="Выйти"
+          className="mt-auto flex h-10 w-10 items-center justify-center text-muted hover:bg-mist"
+        >
+          <LogOut size={22} aria-hidden="true" />
+        </button>
       </aside>
 
       <main className="min-w-0 flex-1 px-7 py-7">
