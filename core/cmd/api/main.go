@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"ai-buddy/core/internal/auth"
 	"ai-buddy/core/internal/platform/config"
 	"ai-buddy/core/internal/platform/db"
 	"ai-buddy/core/internal/platform/httpserver"
@@ -35,6 +36,11 @@ func main() {
 	}
 	defer store.Close()
 
+	if err := store.Migrate(ctx); err != nil {
+		logger.Error("cannot apply migrations", "error", err.Error())
+		os.Exit(1)
+	}
+
 	cache, err := redis.New(ctx, cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
 	if err != nil {
 		logger.Error("cannot create redis client", "error", err.Error())
@@ -47,6 +53,15 @@ func main() {
 	}()
 
 	srv := httpserver.New(cfg, store, cache, logger)
+
+	tokens, err := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTTTL, cfg.JWTIssuer)
+	if err != nil {
+		logger.Error("cannot create token manager", "error", err.Error())
+		os.Exit(1)
+	}
+
+	authService := auth.NewService(auth.NewPostgresUserStore(store.Pool()), tokens)
+	srv.Mount("/api/v1", auth.NewHandler(authService, tokens).Router())
 
 	if err := srv.Run(ctx); err != nil {
 		logger.Error("core api stopped with error", "error", err.Error())

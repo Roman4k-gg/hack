@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+const defaultJWTSecret = "dev-secret-change-me"
+
 type Config struct {
 	HTTPAddr             string
 	PostgresDSN          string
@@ -17,6 +19,7 @@ type Config struct {
 	RedisDB              int
 	JWTSecret            string
 	JWTTTL               time.Duration
+	JWTIssuer            string
 	AIURL                string
 	MCPURL               string
 	IntegrationsMode     string
@@ -38,7 +41,8 @@ func Load() (Config, error) {
 		RedisAddr:          env("REDIS_ADDR", "localhost:6379"),
 		RedisPassword:      env("REDIS_PASSWORD", ""),
 		RedisDB:            envInt("REDIS_DB", 0),
-		JWTSecret:          env("JWT_SECRET", "dev-secret-change-me"),
+		JWTSecret:          env("JWT_SECRET", defaultJWTSecret),
+		JWTIssuer:          env("JWT_ISSUER", "ai-buddy-core"),
 		AIURL:              env("AI_URL", "http://ai:8000"),
 		MCPURL:             env("MCP_URL", "http://mcp:8001/mcp"),
 		IntegrationsMode:   strings.ToLower(env("INTEGRATIONS_MODE", "mock")),
@@ -72,10 +76,22 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.RedisAddr) == "" {
 		return fmt.Errorf("config: REDIS_ADDR is required")
 	}
+	if strings.TrimSpace(c.JWTSecret) == "" {
+		return fmt.Errorf("config: JWT_SECRET is required")
+	}
+	if c.JWTTTL <= 0 {
+		return fmt.Errorf("config: JWT_TTL must be positive")
+	}
+	if strings.TrimSpace(c.JWTIssuer) == "" {
+		return fmt.Errorf("config: JWT_ISSUER is required")
+	}
 	switch c.IntegrationsMode {
 	case "mock", "real":
 	default:
 		return fmt.Errorf("config: INTEGRATIONS_MODE must be \"mock\" or \"real\", got %q", c.IntegrationsMode)
+	}
+	if c.IntegrationsMode == "real" && c.JWTSecret == defaultJWTSecret {
+		return fmt.Errorf("config: JWT_SECRET must be changed in real mode")
 	}
 	return nil
 }
