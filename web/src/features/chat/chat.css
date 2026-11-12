@@ -163,3 +163,101 @@
 .chat__actions {
     padding: 8px 16px;
 }
+
+.message-bubble {
+    min-width: 0;
+    flex-shrink: 0;
+}
+
+.message-list {
+    overflow-anchor: none;
+}
+
+.message-bubble__markdown {
+    line-height: 1.65;
+    white-space: normal;
+}
+
+.message-bubble__markdown> :first-child {
+    margin-top: 0;
+}
+
+.message-bubble__markdown> :last-child {
+    margin-bottom: 0;
+}
+
+.message-bubble__markdown h2 {
+    margin: 16px 0 8px;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.message-bubble__markdown h3 {
+    margin: 16px 0 8px;
+    font-size: 17px;
+    font-weight: 600;
+}
+
+.message-bubble__markdown p {
+    margin: 10px 0;
+}
+
+.message-bubble__markdown ul,
+.message-bubble__markdown ol {
+    margin: 10px 0;
+    padding-left: 24px;
+}
+
+.message-bubble__markdown ul {
+    list-style: disc;
+}
+
+.message-bubble__markdown ol {
+    list-style: decimal;
+}
+
+.message-bubble__markdown a {
+    color: #1d4ed8;
+    text-decoration: underline;
+}
+
+.message-bubble__markdown blockquote {
+    margin: 12px 0;
+    padding: 4px 12px;
+    border-left: 3px solid #94a3b8;
+    color: #475569;
+}
+
+.message-bubble__markdown code {
+    padding: 2px 5px;
+    border-radius: 5px;
+    background: #e2e8f0;
+    font-family: Consolas, monospace;
+    font-size: 13px;
+}
+
+.message-bubble__markdown pre {
+    max-width: 100%;
+    margin: 12px 0;
+    padding: 16px;
+    overflow-x: auto;
+    border-radius: 10px;
+    background: #0f172a;
+    color: #e2e8f0;
+    white-space: pre;
+}
+
+.message-bubble__markdown pre code {
+    padding: 0;
+    background: transparent;
+    color: inherit;
+}
+
+.citation-chip:hover {
+    background: #e2e8f0;
+}
+
+.citation-chip:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 3px;
+}

@@ -1,3 +1,4 @@
+import Markdown from 'react-markdown';
 import type { ChatMessage } from '../types';
 import { CitationChip } from './CitationChip';
 import { ToolCallCard } from './ToolCallCard';
@@ -13,11 +14,36 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         <article
             className={`message-bubble ${isUser ? 'message-bubble--user' : 'message-bubble--assistant'}`}
         >
-            <div className="message-bubble__content">
-                {message.content}
+            <div
+                className={
+                    isUser
+                        ? 'message-bubble__content'
+                        : 'message-bubble__markdown'
+                }
+            >
+                {isUser ? (
+                    message.content
+                ) : (
+                    <Markdown
+                        skipHtml
+                        components={{
+                            a: ({ href, children }) => (
+                                <a
+                                    href={href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    {children}
+                                </a>
+                            ),
+                        }}
+                    >
+                        {message.content}
+                    </Markdown>
+                )}
             </div>
 
-            {message.toolCalls && message.toolCalls.length > 0 && (
+            {!!message.toolCalls?.length && (
                 <div className="message-bubble__tools">
                     {message.toolCalls.map((toolCall) => (
                         <ToolCallCard key={toolCall.id} toolCall={toolCall} />
@@ -25,7 +51,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                 </div>
             )}
 
-            {message.citations && message.citations.length > 0 && (
+            {!!message.citations?.length && (
                 <div className="message-bubble__citations">
                     {message.citations.map((citation) => (
                         <CitationChip key={citation.id} citation={citation} />
