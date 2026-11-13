@@ -1,10 +1,13 @@
+import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuthStore } from '@/features/auth/authStore';
+import { ApiError } from '@/lib/api';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { cn } from '@/lib/utils';
 import { fetchPlan, updateItemStatus } from './api';
-import type { ItemStatus, Plan } from './types';
+import type { ItemStatus, Plan, PlanItem } from './types';
 
 const stageColors = [
   'bg-brand-soft',
@@ -15,9 +18,11 @@ const stageColors = [
 
 export function OnboardingMap() {
   const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.user?.id);
+  const planKey = ['onboarding-plan', userId];
 
-  const { data, isPending, isError, refetch } = useQuery({
-    queryKey: ['onboarding-plan'],
+  const { data, error, isPending, isError, refetch } = useQuery({
+    queryKey: planKey,
     queryFn: fetchPlan,
   });
 
@@ -32,11 +37,11 @@ export function OnboardingMap() {
       reason?: string;
     }) => updateItemStatus(itemId, status, reason),
     onMutate: async ({ itemId, status }) => {
-      await queryClient.cancelQueries({ queryKey: ['onboarding-plan'] });
+      await queryClient.cancelQueries({ queryKey: planKey });
 
-      const previous = queryClient.getQueryData<Plan>(['onboarding-plan']);
+      const previous = queryClient.getQueryData<Plan>(planKey);
 
-      queryClient.setQueryData<Plan>(['onboarding-plan'], (old) =>
+      queryClient.setQueryData<Plan>(planKey, (old) =>
         old ? applyStatus(old, itemId, status) : old,
       );
 
@@ -44,39 +49,29 @@ export function OnboardingMap() {
     },
     onError: (_error, _variables, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(['onboarding-plan'], context.previous);
+        queryClient.setQueryData(planKey, context.previous);
       }
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ['onboarding-plan'] });
+      void queryClient.invalidateQueries({ queryKey: planKey });
     },
   });
 
-  function changeStatus(
-    itemId: string,
-    status: ItemStatus,
-    title: string,
-  ) {
-    let reason: string | undefined;
-
-    if (status === 'blocked') {
-      const input = window.prompt(
-        `Почему пункт «${title}» заблокирован? Причина попадёт в карту и в аудит.`,
-        'Ждём подтверждения от HR',
-      );
-
-      if (!input) {
-        return;
-      }
-
-      reason = input;
-    }
-
+  function changeStatus(itemId: string, status: ItemStatus, reason?: string) {
     mutation.mutate({ itemId, status, reason });
   }
 
   if (isPending) {
     return <MapSkeleton />;
+  }
+
+  if (error instanceof ApiError && error.status === 404) {
+    return (
+      <EmptyState
+        title="План адаптации не назначен"
+        text="Как только HR или наставник назначат план, он появится здесь."
+      />
+    );
   }
 
   if (isError || !data) {
@@ -113,7 +108,8 @@ function applyStatus(plan: Plan, itemId: string, status: ItemStatus): Plan {
     progress: {
       done,
       total: allItems.length,
-      percent: allItems.length > 0 ? Math.round((done / allItems.length) * 100) : 0,
+      percent:
+        allItems.length > 0 ? Math.round((done / allItems.length) * 100) : 0,
     },
   };
 }
@@ -141,7 +137,7 @@ function PlanView({
   onChangeStatus,
 }: {
   plan: Plan;
-  onChangeStatus: (itemId: string, status: ItemStatus, title: string) => void;
+  onChangeStatus: (itemId: string, status: ItemStatus, reason?: string) => void;
 }) {
   if (plan.stages.length === 0) {
     return (
@@ -162,17 +158,43 @@ function PlanView({
       </h1>
 
       <div className="mt-6 flex flex-col gap-5 lg:flex-row">
-        {plan.next_step && (
-          <div className="bg-brand p-5 lg:flex-[2]">
-            <p className="text-xs font-bold">Следующий шаг</p>
-            <p className="mt-1 text-xl font-extrabold tracking-tight">
-              {plan.next_step.title}
-            </p>
-            <p className="mt-1 text-sm">{plan.next_step.reason}</p>
-          </div>
-        )}
+        <div className="bg-brand p-5 lg:flex-[2]">
+          <p className="text-xs font-bold">Следующий шаг</p>
+          {plan.next_step ? (
+            <>
+              <p className="mt-1 text-xl font-extrabold tracking-tight">
+                {plan.next_step.title}
+              </p>
+              <p className="mt-1 text-sm">{plan.next_step.reason}</p>
+            </>
+          ) : plan.progress.percent === 100 ? (
+            <>
+              <p className="mt-1 text-xl font-extrabold tracking-tight">
+                Все пункты плана выполнены
+              </p>
+              <p className="mt-1 text-sm">
+                Отличная работа! Если появятся вопросы — спроси наставника или
+                AI-наставника в чате.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="mt-1 text-xl font-extrabold tracking-tight">
+                Пока нет доступных шагов
+              </p>
+              <p className="mt-1 text-sm">
+                Сними блокеры или уточни план у наставника.
+              </p>
+            </>
+          )}
+        </div>
 
-        <div className="rotate-[1.5deg] bg-azure p-5 lg:flex-1">
+        <div
+          className={cn(
+            'bg-azure p-5 lg:flex-1',
+            plan.progress.percent < 100 && 'rotate-[1.5deg]',
+          )}
+        >
           <p className="text-xs font-bold">Прогресс</p>
           <p className="mt-2 text-5xl font-extrabold tracking-tight">
             {plan.progress.percent}%
@@ -193,52 +215,11 @@ function PlanView({
 
             <ul className="mt-3 flex flex-col gap-3">
               {stage.items.map((item) => (
-                <li
+                <ItemCard
                   key={item.id}
-                  className={cn(
-                    'flex min-h-[8rem] flex-col bg-paper p-3',
-                    item.status === 'blocked' && 'border-l-4 border-alert',
-                  )}
-                >
-                  <p className="text-sm font-medium leading-snug">
-                    {item.title}
-                  </p>
-                  <p className="mt-1 line-clamp-2 text-xs text-muted">
-                    {item.description}
-                  </p>
-                  <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-2">
-                    <StatusBadge status={item.status} />
-                    {item.status === 'blocked' && item.blocked_reason && (
-                      <span className="text-xs text-muted">
-                        {item.blocked_reason}
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-1 pt-1">
-                    {item.status !== 'in_progress' && (
-                      <StatusAction
-                        label="В работу"
-                        onClick={() =>
-                          onChangeStatus(item.id, 'in_progress', item.title)
-                        }
-                      />
-                    )}
-                    {item.status !== 'done' && (
-                      <StatusAction
-                        label="Готово"
-                        onClick={() => onChangeStatus(item.id, 'done', item.title)}
-                      />
-                    )}
-                    {item.status !== 'blocked' && (
-                      <StatusAction
-                        label="Блокер"
-                        onClick={() =>
-                          onChangeStatus(item.id, 'blocked', item.title)
-                        }
-                      />
-                    )}
-                  </div>
-                </li>
+                  item={item}
+                  onChangeStatus={onChangeStatus}
+                />
               ))}
             </ul>
           </div>
@@ -263,5 +244,104 @@ function StatusAction({
     >
       {label}
     </button>
+  );
+}
+
+function ItemCard({
+  item,
+  onChangeStatus,
+}: {
+  item: PlanItem;
+  onChangeStatus: (itemId: string, status: ItemStatus, reason?: string) => void;
+}) {
+  const [blocking, setBlocking] = useState(false);
+  const [reason, setReason] = useState('');
+  const isBlocked = item.status === 'blocked';
+
+  function submitBlock(event: FormEvent) {
+    event.preventDefault();
+    const trimmed = reason.trim();
+
+    if (!trimmed) {
+      return;
+    }
+
+    onChangeStatus(item.id, 'blocked', trimmed);
+    setBlocking(false);
+    setReason('');
+  }
+
+  function cancelBlock() {
+    setBlocking(false);
+    setReason('');
+  }
+
+  return (
+    <li
+      className={cn(
+        'flex min-h-[8rem] flex-col bg-paper p-3',
+        isBlocked && 'border-l-4 border-alert',
+      )}
+    >
+      <p className="text-sm font-medium leading-snug">{item.title}</p>
+      <p className="mt-1 line-clamp-2 text-xs text-muted">{item.description}</p>
+
+      <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-2">
+        <StatusBadge status={item.status} />
+        {isBlocked && item.blocked_reason && (
+          <span className="text-xs text-muted">{item.blocked_reason}</span>
+        )}
+      </div>
+
+      {blocking ? (
+        <form onSubmit={submitBlock} className="mt-2 flex flex-col gap-2">
+          <input
+            autoFocus
+            value={reason}
+            maxLength={200}
+            onChange={(event) => setReason(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                cancelBlock();
+              }
+            }}
+            placeholder="Что мешает? Например: нет доступа к VPN"
+            aria-label={`Причина блокировки для «${item.title}»`}
+            className="w-full border border-line bg-mist px-2 py-1 text-xs outline-none focus:border-ink"
+          />
+          <div className="flex gap-1">
+            <button
+              type="submit"
+              disabled={!reason.trim()}
+              className="bg-ink px-2 py-0.5 text-[11px] font-bold text-paper disabled:opacity-40"
+            >
+              Сохранить
+            </button>
+            <StatusAction label="Отмена" onClick={cancelBlock} />
+          </div>
+        </form>
+      ) : (
+        <div className="mt-2 flex flex-wrap gap-1 pt-1">
+          {item.status !== 'in_progress' && (
+            <StatusAction
+              label={isBlocked ? 'Снять блок' : 'В работу'}
+              onClick={() => onChangeStatus(item.id, 'in_progress')}
+            />
+          )}
+          {item.status !== 'done' && (
+            <StatusAction
+              label="Готово"
+              onClick={() => onChangeStatus(item.id, 'done')}
+            />
+          )}
+          {!isBlocked && (
+            <StatusAction
+              label="Нужна помощь"
+              onClick={() => setBlocking(true)}
+            />
+          )}
+        </div>
+      )}
+    </li>
   );
 }
