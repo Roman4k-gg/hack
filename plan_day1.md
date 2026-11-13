@@ -27,19 +27,19 @@
 - [X] **R-01** Создать каркас `core/`, `docker-compose.yml`, `.env.example`, `Makefile`, healthchecks
 - [X] **R-02** Поднять PostgreSQL + Redis, написать миграции и seed
 - [X] **R-03** Сделать mock-логин, JWT, `GET /api/v1/me`
-- [ ] **R-04** Сделать RBAC middleware, скоупы и тесты на доступ
-- [ ] **R-05** Сделать `GET /api/v1/onboarding/plan` с этапами, пунктами и `next_step`
-- [ ] **R-06** Сделать `PATCH /api/v1/onboarding/items/{id}` со статусами
-- [ ] **R-07** Сделать SSE-прокси `POST /api/v1/chat/stream`: flush, таймауты, отмена
-- [ ] **R-08** Подключить `audit_log` и `events`
-- [ ] **R-09** Написать тесты на auth/RBAC/checklist, настроить coverage и CI
-- [ ] **R-10** Интегрироваться с Тимохой, проверить `docker compose down -v && make up && make seed`
+- [X] **R-04** Сделать RBAC middleware, скоупы и тесты на доступ
+- [X] **R-05** Сделать `GET /api/v1/onboarding/plan` с этапами, пунктами и `next_step`
+- [X] **R-06** Сделать `PATCH /api/v1/onboarding/items/{id}` со статусами
+- [X] **R-07** Сделать SSE-прокси `POST /api/v1/chat/stream`: flush, таймауты, отмена
+- [X] **R-08** Подключить `audit_log` и `events`
+- [X] **R-09** Написать тесты на auth/RBAC/checklist, настроить coverage и CI
+- [X] **R-10** Интегрироваться с Тимохой, проверить `docker compose down -v && make up && make seed` — сценарий `down -v && up && seed` проверен, сквозной чат ждёт AI-сервис (T-04/T-09)
 
 ### P1
 
-- [ ] **R-11** Написать `README.md` v0: запуск, аккаунты, порты, troubleshooting
-- [ ] **R-12** Добавить `.gitattributes` и PowerShell-fallback для Windows
-- [ ] **R-13** Добавить rate limit на чат
+- [X] **R-11** Написать `README.md` v0: запуск, аккаунты, порты, troubleshooting
+- [X] **R-12** Добавить `.gitattributes` и PowerShell-fallback для Windows
+- [X] **R-13** Добавить rate limit на чат
 
 ---
 
@@ -127,17 +127,17 @@
 
 Проходим все пункты перед тем, как закрыть день.
 
-- [ ] **G-01** `git clone` → `cp .env.example .env` → `make up` → `make seed` работает на чистой машине
-- [ ] **G-02** Логин под `dasha@demo.local`, роль `intern`, команда `Search`
-- [ ] **G-03** Карта адаптации показывает этапы, 8–10 пунктов, статусы и «следующий шаг» из PostgreSQL
-- [ ] **G-04** Чат отвечает потоком
-- [ ] **G-05** В ответе есть карточка вызова `get_onboarding_plan`
-- [ ] **G-06** Вопрос «где взять доступ к Jira?» возвращает ответ со ссылкой на демо-документ
-- [ ] **G-07** `audit_log` и `events` пишутся
-- [ ] **G-08** CI зелёный: Go, Python, Web собираются
-- [ ] **G-09** Минимум 3 теста во всех слоях
-- [ ] **G-10** Отчёты покрытия генерируются одной командой
-- [ ] **G-11** OpenAPI v0, SDD v0, README v0 и каркас презентации в репозитории
+- [X] **G-01** `git clone` → `cp .env.example .env` → `make up` → `make seed` работает на чистой машине
+- [X] **G-02** Логин под `dasha@demo.local`, роль `intern`, команда `Search`
+- [X] **G-03** Карта адаптации показывает этапы, 8–10 пунктов, статусы и «следующий шаг» из PostgreSQL
+- [ ] **G-04** Чат отвечает потоком — SSE-прокси core проверен на заглушке AI, ждём настоящий AI-сервис (T-04)
+- [ ] **G-05** В ответе есть карточка вызова `get_onboarding_plan` — задача AI-сервиса (T-05)
+- [ ] **G-06** Вопрос «где взять доступ к Jira?» возвращает ответ со ссылкой на демо-документ — задача AI-сервиса (T-07)
+- [X] **G-07** `audit_log` и `events` пишутся
+- [ ] **G-08** CI зелёный: Go, Python, Web собираются — CI для Go готов, Python/Web ждут свои сервисы
+- [ ] **G-09** Минимум 3 теста во всех слоях — Go закрыт, Python/Web ждут свои сервисы
+- [X] **G-10** Отчёты покрытия генерируются одной командой
+- [ ] **G-11** OpenAPI v0, SDD v0, README v0 и каркас презентации в репозитории — README v0 готов
 - [ ] **G-12** Чистый запуск проверил кто-то, кроме автора инфраструктуры
 
 ---

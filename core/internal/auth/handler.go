@@ -3,33 +3,64 @@ package auth
 import (
 	"encoding/json"
 	stderrors "errors"
+	"log/slog"
 	"net/http"
 
+	"ai-buddy/core/internal/audit"
 	"ai-buddy/core/internal/platform/errors"
-
-	"github.com/go-chi/chi/v5"
+	"ai-buddy/core/internal/platform/reqctx"
 )
 
 type Handler struct {
-	service *Service
-	tokens  *TokenManager
+	service  *Service
+	tokens   *TokenManager
+	recorder *audit.Recorder
+	logger   *slog.Logger
 }
 
-func NewHandler(service *Service, tokens *TokenManager) *Handler {
-	return &Handler{service: service, tokens: tokens}
+func NewHandler(service *Service, tokens *TokenManager, recorder *audit.Recorder, logger *slog.Logger) *Handler {
+	return &Handler{service: service, tokens: tokens, recorder: recorder, logger: logger}
 }
 
-func (h *Handler) Router() chi.Router {
-	router := chi.NewRouter()
+func (h *Handler) Login() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req loginRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			errors.Write(w, r.Context(), http.StatusBadRequest,
+				errors.New(errors.CodeValidation, "Некорректный формат запроса").
+					WithDetail("reason", err.Error()))
+			return
+		}
 
-	router.Post("/auth/login", h.handleLogin)
+		session, err := h.service.Login(r.Context(), req.Email)
+		if err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
 
-	router.Group(func(r chi.Router) {
-		r.Use(RequireAuth(h.tokens))
-		r.Get("/me", h.handleMe)
-	})
+		h.record(r, session.User, "auth.login", "user_logged_in")
 
-	return router
+		writeJSON(w, http.StatusOK, session)
+	}
+}
+
+func (h *Handler) Me() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := reqctx.PrincipalFrom(r.Context())
+		if !ok {
+			errors.Write(w, r.Context(), http.StatusUnauthorized,
+				errors.New(errors.CodeUnauthorized, "Требуется авторизация"))
+			return
+		}
+
+		user, err := h.service.Me(r.Context(), principal.UserID)
+		if err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, user)
+	}
 }
 
 type loginRequest struct {
@@ -37,39 +68,35 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
-func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
-	var req loginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		errors.Write(w, r.Context(), http.StatusBadRequest,
-			errors.New(errors.CodeValidation, "Некорректный формат запроса").
-				WithDetail("reason", err.Error()))
+func (h *Handler) record(r *http.Request, user User, action, event string) {
+	if h.recorder == nil {
 		return
 	}
 
-	session, err := h.service.Login(r.Context(), req.Email)
-	if err != nil {
-		writeServiceError(w, r, err)
-		return
+	traceID := reqctx.TraceID(r.Context())
+	payload := map[string]any{"email": user.Email, "role": user.Role}
+
+	if err := h.recorder.Record(r.Context(), audit.Entry{
+		ActorID:    user.ID,
+		Action:     action,
+		EntityType: "user",
+		EntityID:   user.ID,
+		Payload:    payload,
+		TraceID:    traceID,
+	}); err != nil && h.logger != nil {
+		h.logger.Warn("cannot write audit log", "error", err.Error())
 	}
 
-	writeJSON(w, http.StatusOK, session)
-}
-
-func (h *Handler) handleMe(w http.ResponseWriter, r *http.Request) {
-	principal, ok := PrincipalFrom(r.Context())
-	if !ok {
-		errors.Write(w, r.Context(), http.StatusUnauthorized,
-			errors.New(errors.CodeUnauthorized, "Требуется авторизация"))
-		return
+	if err := h.recorder.Emit(r.Context(), audit.Event{
+		UserID:     user.ID,
+		Name:       event,
+		EntityType: "user",
+		EntityID:   user.ID,
+		Payload:    payload,
+		TraceID:    traceID,
+	}); err != nil && h.logger != nil {
+		h.logger.Warn("cannot write event", "error", err.Error())
 	}
-
-	user, err := h.service.Me(r.Context(), principal.UserID)
-	if err != nil {
-		writeServiceError(w, r, err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, user)
 }
 
 func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {

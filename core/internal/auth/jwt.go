@@ -12,9 +12,10 @@ const defaultIssuer = "ai-buddy-core"
 
 type Claims struct {
 	jwt.RegisteredClaims
-	Email  string `json:"email"`
-	Role   string `json:"role"`
-	TeamID string `json:"team_id,omitempty"`
+	Email  string   `json:"email"`
+	Role   string   `json:"role"`
+	TeamID string   `json:"team_id,omitempty"`
+	Scopes []string `json:"scopes,omitempty"`
 }
 
 type TokenManager struct {
@@ -46,7 +47,7 @@ func (m *TokenManager) TTL() time.Duration {
 	return m.ttl
 }
 
-func (m *TokenManager) Issue(userID, email, role, teamID string) (string, time.Time, error) {
+func (m *TokenManager) Issue(userID, email, role, teamID string, scopes []string) (string, time.Time, error) {
 	if strings.TrimSpace(userID) == "" {
 		return "", time.Time{}, fmt.Errorf("auth: user id is required")
 	}
@@ -64,6 +65,7 @@ func (m *TokenManager) Issue(userID, email, role, teamID string) (string, time.T
 		Email:  strings.TrimSpace(email),
 		Role:   strings.TrimSpace(role),
 		TeamID: strings.TrimSpace(teamID),
+		Scopes: scopes,
 	}
 
 	signed, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(m.secret)

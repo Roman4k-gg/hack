@@ -8,11 +8,16 @@ import (
 	"os/signal"
 	"syscall"
 
+	"ai-buddy/core/internal/api"
+	"ai-buddy/core/internal/audit"
 	"ai-buddy/core/internal/auth"
+	"ai-buddy/core/internal/chat"
+	"ai-buddy/core/internal/onboarding"
 	"ai-buddy/core/internal/platform/config"
 	"ai-buddy/core/internal/platform/db"
 	"ai-buddy/core/internal/platform/httpserver"
 	"ai-buddy/core/internal/platform/logging"
+	"ai-buddy/core/internal/platform/ratelimit"
 	"ai-buddy/core/internal/platform/redis"
 )
 
@@ -60,8 +65,29 @@ func main() {
 		os.Exit(1)
 	}
 
+	recorder := audit.New(store.Pool(), logger)
+
 	authService := auth.NewService(auth.NewPostgresUserStore(store.Pool()), tokens)
-	srv.Mount("/api/v1", auth.NewHandler(authService, tokens).Router())
+	authHandler := auth.NewHandler(authService, tokens, recorder, logger)
+
+	onboardingService := onboarding.NewService(onboarding.NewPostgresPlanStore(store.Pool()), recorder, logger)
+	onboardingHandler := onboarding.NewHandler(onboardingService, logger)
+
+	limiter := ratelimit.New(ratelimit.NewRedisBackend(cache.Client()), cfg.RateLimitRPS)
+	chatService := chat.NewService(chat.Config{
+		AIURL:   cfg.AIURL,
+		AIPath:  cfg.AIChatPath,
+		Timeout: cfg.ChatTimeout,
+		Limiter: limiter,
+	}, chat.NewClient(), logger)
+	chatHandler := chat.NewHandler(chatService, recorder, logger)
+
+	srv.Mount("/api/v1", api.New(api.Deps{
+		Auth:       authHandler,
+		Onboarding: onboardingHandler,
+		Chat:       chatHandler,
+		Tokens:     tokens,
+	}))
 
 	if err := srv.Run(ctx); err != nil {
 		logger.Error("core api stopped with error", "error", err.Error())

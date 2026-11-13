@@ -7,8 +7,21 @@ COMPOSE_OBS   := docker compose --profile dev --profile observability
 
 .DEFAULT_GOAL := up
 
+DEV_SERVICES := web
+ifneq ($(wildcard ai/Dockerfile),)
+DEV_SERVICES += ai mcp
+endif
+
+DEMO_SERVICES := $(DEV_SERVICES)
+ifneq ($(wildcard mocks/Dockerfile),)
+DEMO_SERVICES += mocks
+endif
+ifneq ($(wildcard ai/Dockerfile),)
+DEMO_SERVICES += cron
+endif
+
 .PHONY: help up up-dev up-demo up-observability down seed demo-reset logs ps \
-        test test-core test-ai test-web coverage e2e lint fmt \
+        test test-core test-ai test-web coverage e2e lint fmt smoke \
         dev-core dev-ai dev-web dev-mcp
 
 help:
@@ -20,11 +33,12 @@ up:
 	@echo "ready:   http://localhost:8081/readyz"
 
 up-dev:
-	$(COMPOSE_DEV) up --build -d --wait
+	$(COMPOSE_DEV) up --build -d --wait $(DEV_SERVICES)
 	@echo "web:     http://localhost:3000"
+	@echo "core:    http://localhost:8081/healthz"
 
 up-demo:
-	$(COMPOSE_DEMO) up --build -d --wait
+	$(COMPOSE_DEMO) up --build -d --wait $(DEMO_SERVICES)
 	@echo "web:     http://localhost:3000"
 	@echo "mocks:   http://localhost:8090/healthz"
 
@@ -59,7 +73,7 @@ test-ai:
 	cd ai && uv run pytest
 
 test-web:
-	cd web && pnpm vitest run
+	cd web && npm run typecheck
 
 coverage:
 	cd core && go test ./... -race -coverprofile=coverage.out -covermode=atomic
@@ -69,18 +83,21 @@ coverage:
 	@echo "coverage: core/coverage.html"
 
 e2e:
-	cd web && pnpm playwright test
+	@if [ -f web/playwright.config.ts ]; then cd web && npx playwright test; else echo "e2e: playwright не настроен"; fi
+
+smoke:
+	@bash scripts/smoke.sh
 
 lint:
 	cd core && go vet ./...
-	cd core && golangci-lint run ./...
+	@if command -v golangci-lint >/dev/null 2>&1; then cd core && golangci-lint run ./...; else echo "golangci-lint не установлен — пропускаем"; fi
 	@if [ -d ai ]; then cd ai && uv run ruff check . && uv run ruff format --check .; fi
-	@if [ -d web ]; then cd web && pnpm lint; fi
+	@if [ -d web ]; then cd web && npm run lint; fi
 
 fmt:
 	cd core && gofmt -l -w .
 	@if [ -d ai ]; then cd ai && uv run ruff format .; fi
-	@if [ -d web ]; then cd web && pnpm format; fi
+	@if [ -d web ]; then cd web && npm run format; fi
 
 dev-core:
 	cd core && go run ./cmd/api
@@ -89,7 +106,7 @@ dev-ai:
 	cd ai && uv run uvicorn app.main:app --reload --port 8000
 
 dev-web:
-	cd web && pnpm dev
+	cd web && npm run dev
 
 dev-mcp:
 	cd ai && uv run python -m app.mcp

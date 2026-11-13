@@ -20,7 +20,18 @@ func newTestHandler(t *testing.T) (*Handler, *TokenManager) {
 	require.NoError(t, err)
 
 	service := NewService(newFakeUserStore(demoUser()), manager)
-	return NewHandler(service, manager), manager
+	return NewHandler(service, manager, nil, nil), manager
+}
+
+func doLogin(t *testing.T, handler *Handler, body string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.Login()(rec, req)
+
+	return rec
 }
 
 func TestLoginReturnsTokenAndUser(t *testing.T) {
@@ -28,11 +39,7 @@ func TestLoginReturnsTokenAndUser(t *testing.T) {
 
 	handler, _ := newTestHandler(t)
 
-	body := strings.NewReader(`{"email":"dasha@demo.local"}`)
-	req := httptest.NewRequest(http.MethodPost, "/auth/login", body)
-	rec := httptest.NewRecorder()
-
-	handler.Router().ServeHTTP(rec, req)
+	rec := doLogin(t, handler, `{"email":"dasha@demo.local"}`)
 
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Equal(t, "application/json; charset=utf-8", rec.Header().Get("Content-Type"))
@@ -51,10 +58,21 @@ func TestLoginWithoutEmailReturnsValidationError(t *testing.T) {
 
 	handler, _ := newTestHandler(t)
 
-	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"email":""}`))
-	rec := httptest.NewRecorder()
+	rec := doLogin(t, handler, `{"email":""}`)
 
-	handler.Router().ServeHTTP(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+
+	var envelope errors.Envelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+	require.Equal(t, errors.CodeValidation, envelope.Error.Code)
+}
+
+func TestLoginWithBrokenBodyReturnsValidationError(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newTestHandler(t)
+
+	rec := doLogin(t, handler, `{`)
 
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 
@@ -68,10 +86,7 @@ func TestLoginWithUnknownUserReturnsUnauthorized(t *testing.T) {
 
 	handler, _ := newTestHandler(t)
 
-	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{"email":"nobody@demo.local"}`))
-	rec := httptest.NewRecorder()
-
-	handler.Router().ServeHTTP(rec, req)
+	rec := doLogin(t, handler, `{"email":"nobody@demo.local"}`)
 
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
 
@@ -83,12 +98,12 @@ func TestLoginWithUnknownUserReturnsUnauthorized(t *testing.T) {
 func TestMeRequiresAuthorization(t *testing.T) {
 	t.Parallel()
 
-	handler, _ := newTestHandler(t)
+	handler, manager := newTestHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
 	rec := httptest.NewRecorder()
 
-	handler.Router().ServeHTTP(rec, req)
+	RequireAuth(manager)(http.HandlerFunc(handler.Me())).ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
 
@@ -100,13 +115,13 @@ func TestMeRequiresAuthorization(t *testing.T) {
 func TestMeRejectsInvalidToken(t *testing.T) {
 	t.Parallel()
 
-	handler, _ := newTestHandler(t)
+	handler, manager := newTestHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
 	req.Header.Set("Authorization", "Bearer broken-token")
 	rec := httptest.NewRecorder()
 
-	handler.Router().ServeHTTP(rec, req)
+	RequireAuth(manager)(http.HandlerFunc(handler.Me())).ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
 
@@ -120,14 +135,14 @@ func TestMeReturnsProfile(t *testing.T) {
 
 	handler, manager := newTestHandler(t)
 
-	token, _, err := manager.Issue(demoUser().ID, demoUser().Email, demoUser().Role, demoUser().TeamID)
+	token, _, err := manager.Issue(demoUser().ID, demoUser().Email, demoUser().Role, demoUser().TeamID, []string{"onboarding:plan:read"})
 	require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodGet, "/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 
-	handler.Router().ServeHTTP(rec, req)
+	RequireAuth(manager)(http.HandlerFunc(handler.Me())).ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)
 

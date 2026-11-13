@@ -60,6 +60,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
       JWT_TTL: ${JWT_TTL:-8h}
       AI_URL: ${AI_URL:-http://ai:8000}
+      AI_CHAT_PATH: ${AI_CHAT_PATH:-/api/v1/chat/stream}
+      CHAT_TIMEOUT: ${CHAT_TIMEOUT:-120s}
       MCP_URL: ${MCP_URL:-http://mcp:8001/mcp}
       CORE_URL: ${CORE_URL:-http://core:8081}
       INTEGRATIONS_MODE: ${INTEGRATIONS_MODE:-mock}

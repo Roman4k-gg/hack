@@ -21,6 +21,8 @@ type Config struct {
 	JWTTTL               time.Duration
 	JWTIssuer            string
 	AIURL                string
+	AIChatPath           string
+	ChatTimeout          time.Duration
 	MCPURL               string
 	IntegrationsMode     string
 	FeatureFlagsOverride map[string]bool
@@ -44,6 +46,7 @@ func Load() (Config, error) {
 		JWTSecret:          env("JWT_SECRET", defaultJWTSecret),
 		JWTIssuer:          env("JWT_ISSUER", "ai-buddy-core"),
 		AIURL:              env("AI_URL", "http://ai:8000"),
+		AIChatPath:         env("AI_CHAT_PATH", "/api/v1/chat/stream"),
 		MCPURL:             env("MCP_URL", "http://mcp:8001/mcp"),
 		IntegrationsMode:   strings.ToLower(env("INTEGRATIONS_MODE", "mock")),
 		LogLevel:           strings.ToLower(env("LOG_LEVEL", "info")),
@@ -57,6 +60,9 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	if cfg.ConfirmationTTL, err = envSeconds("CONFIRMATION_TTL", 300); err != nil {
+		return Config{}, err
+	}
+	if cfg.ChatTimeout, err = envDuration("CHAT_TIMEOUT", 120*time.Second); err != nil {
 		return Config{}, err
 	}
 	cfg.MaxToolIterations = envInt("MAX_TOOL_ITERATIONS", 5)
