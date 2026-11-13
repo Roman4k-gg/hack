@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, useNavigate } from '@tanstack/react-router';
 import { LogOut, MapIcon, MessageCircle, Users } from 'lucide-react';
 import { useAuthStore } from '@/features/auth/authStore';
@@ -7,6 +8,7 @@ const TEAM_SCOPE = 'onboarding:team:read';
 
 export function AppShell() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
 
@@ -30,6 +32,7 @@ export function AppShell() {
 
   function onLogout() {
     logout();
+    queryClient.clear();
     void navigate({ to: '/login' });
   }
 
