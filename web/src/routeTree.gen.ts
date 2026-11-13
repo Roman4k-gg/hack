@@ -14,6 +14,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppMapRouteImport } from './routes/_app/map'
+import { Route as AppRequestsRouteImport } from './routes/_app/requests'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -39,18 +40,25 @@ const AppMapRoute = AppMapRouteImport.update({
   path: '/map',
   getParentRoute: () => AppRoute,
 } as any)
+const AppRequestsRoute = AppRequestsRouteImport.update({
+  id: '/requests',
+  path: '/requests',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/dashboard': typeof AppDashboardRoute
   '/map': typeof AppMapRoute
+  '/requests': typeof AppRequestsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/dashboard': typeof AppDashboardRoute
   '/map': typeof AppMapRoute
+  '/requests': typeof AppRequestsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -59,13 +67,21 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/map': typeof AppMapRoute
+  '/_app/requests': typeof AppRequestsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/dashboard' | '/map'
+  fullPaths: '/' | '/login' | '/dashboard' | '/map' | '/requests'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/dashboard' | '/map'
-  id: '__root__' | '/' | '/_app' | '/login' | '/_app/dashboard' | '/_app/map'
+  to: '/' | '/login' | '/dashboard' | '/map' | '/requests'
+  id:
+    | '__root__'
+    | '/'
+    | '/_app'
+    | '/login'
+    | '/_app/dashboard'
+    | '/_app/map'
+    | '/_app/requests'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -111,17 +127,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppMapRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/requests': {
+      id: '/_app/requests'
+      path: '/requests'
+      fullPath: '/requests'
+      preLoaderRoute: typeof AppRequestsRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
   AppDashboardRoute: typeof AppDashboardRoute
   AppMapRoute: typeof AppMapRoute
+  AppRequestsRoute: typeof AppRequestsRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppDashboardRoute: AppDashboardRoute,
   AppMapRoute: AppMapRoute,
+  AppRequestsRoute: AppRequestsRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

@@ -1,6 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, useNavigate } from '@tanstack/react-router';
-import { LogOut, MapIcon, MessageCircle, Users } from 'lucide-react';
+import {
+  ClipboardList,
+  LogOut,
+  MapIcon,
+  MessageCircle,
+  Users,
+} from 'lucide-react';
 import { useAuthStore } from '@/features/auth/authStore';
 import { roleLabels } from '@/features/auth/types';
 
@@ -16,15 +22,21 @@ export function AppShell() {
   const canSeeTeam = scopes.includes(TEAM_SCOPE) || scopes.includes('*');
 
   const navItems = [
-    { to: '/map', label: 'Карта', icon: MapIcon, color: 'bg-brand' },
-    { to: '/', label: 'Чат', icon: MessageCircle, color: 'bg-azure' },
+    { to: '/map', label: 'Карта', icon: MapIcon, color: 'bg-brand-soft' },
+    { to: '/', label: 'Чат', icon: MessageCircle, color: 'bg-azure-soft' },
+    {
+      to: '/requests',
+      label: 'Заявки',
+      icon: ClipboardList,
+      color: 'bg-alert-soft',
+    },
     ...(canSeeTeam
       ? [
           {
             to: '/dashboard',
             label: 'Команда',
             icon: Users,
-            color: 'bg-iris',
+            color: 'bg-iris-soft',
           },
         ]
       : []),

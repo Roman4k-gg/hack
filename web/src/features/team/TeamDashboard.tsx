@@ -5,6 +5,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuthStore } from '@/features/auth/authStore';
 import { cn } from '@/lib/utils';
 import { fetchTeamReport } from './api';
+import { TeamInsights } from './TeamInsights';
 import type { TeamMember } from './types';
 
 const TEAM_SCOPE = 'onboarding:team:read';
@@ -111,6 +112,8 @@ export function TeamDashboard() {
           tone="bg-alert-soft"
         />
       </div>
+
+      <TeamInsights />
 
       {overview.teams.length > 1 && (
         <div className="mt-6 flex flex-wrap gap-2">

@@ -336,7 +336,7 @@ function ItemCard({
           )}
           {!isBlocked && (
             <StatusAction
-              label="Заблокировать"
+              label="Нужна помощь"
               onClick={() => setBlocking(true)}
             />
           )}
