@@ -6,6 +6,9 @@ on:
       - main
       - 'feat/**'
       - 'fix/**'
+      - 'Roman/**'
+      - 'Katya/**'
+      - 'Masha/**'
   pull_request:
 
 permissions:
