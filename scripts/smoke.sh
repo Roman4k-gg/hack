@@ -122,6 +122,40 @@ else
     skip "PATCH пункта: нет незакрытых пунктов"
 fi
 
+section 'Метрики команды'
+
+MENTOR_LOGIN=$(curl -sS --max-time 10 -X POST "$CORE_URL/api/v1/auth/login" \
+    -H 'Content-Type: application/json' \
+    -d '{"email":"petr@demo.local"}')
+
+MENTOR_TOKEN=$(json_get "d['token']" <<<"$MENTOR_LOGIN")
+
+if [ -n "${MENTOR_TOKEN:-}" ]; then
+    TEAM=$(curl -sS --max-time 10 "$CORE_URL/api/v1/team/interns" \
+        -H "Authorization: Bearer $MENTOR_TOKEN")
+
+    COUNT=$(json_get "len(d['interns'])" <<<"$TEAM")
+    METRICS=$(json_get "all('progress' in m and 'pace' in m for m in d['interns'])" <<<"$TEAM")
+    AT_RISK=$(json_get "d['overview']['at_risk']" <<<"$TEAM")
+
+    if [ "${COUNT:-0}" -gt 0 ] && [ "${METRICS:-}" = "True" ]; then
+        ok "GET /api/v1/team/interns: стажёров $COUNT, у всех прогресс и успеваемость, в риске $AT_RISK"
+    else
+        fail "GET /api/v1/team/interns вернул: $TEAM"
+    fi
+
+    code=$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' \
+        "$CORE_URL/api/v1/team/interns" "${AUTH[@]}")
+
+    if [ "$code" = "403" ]; then
+        ok "стажёр не видит метрики команды → 403"
+    else
+        fail "стажёр запросил метрики команды → $code (ожидался 403)"
+    fi
+else
+    fail "mock-логин petr@demo.local не выдал токен"
+fi
+
 section 'Чат (SSE)'
 
 STREAM=$(curl -sS --max-time 15 -N -X POST "$CORE_URL/api/v1/chat/stream" \

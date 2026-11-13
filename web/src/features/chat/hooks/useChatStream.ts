@@ -8,6 +8,7 @@ interface ChatStreamOptions {
     body: unknown;
     headers?: Record<string, string>;
     onEvent: (event: SSEEvent) => void;
+    onFailure?: (error: Error) => void;
 }
 
 type StreamStatus = 'idle' | 'streaming' | 'error';
@@ -29,6 +30,7 @@ export function useChatStream() {
         body,
         headers,
         onEvent,
+        onFailure,
     }: ChatStreamOptions) => {
         controllerRef.current?.abort();
 
@@ -51,7 +53,7 @@ export function useChatStream() {
             });
 
             if (!response.ok) {
-                throw new Error(`Ошибка HTTP: ${response.status}`);
+                throw new Error(statusMessage(response.status));
             }
 
             if (!response.body) {
@@ -87,12 +89,14 @@ export function useChatStream() {
             }
 
             if (controllerRef.current === controller) {
-                setError(
+                const failure =
                     err instanceof Error
-                        ? err.message
-                        : 'Неизвестная ошибка'
-                );
+                        ? err
+                        : new Error('Неизвестная ошибка');
+
+                setError(failure.message);
                 setStatus('error');
+                onFailure?.(failure);
             }
         } finally {
             if (controllerRef.current === controller) {
@@ -119,4 +123,19 @@ export function useChatStream() {
         error,
         isStreaming: status === 'streaming',
     };
+}
+
+function statusMessage(status: number): string {
+    switch (status) {
+        case 401:
+            return 'Сессия истекла, войдите заново';
+        case 429:
+            return 'Слишком много запросов, попробуйте позже';
+        case 503:
+            return 'Ассистент сейчас недоступен';
+        case 504:
+            return 'Ответ ассистента не успел прийти вовремя';
+        default:
+            return `Ошибка сервера: ${status}`;
+    }
 }

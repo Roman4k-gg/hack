@@ -261,3 +261,11 @@
     outline: 2px solid #2563eb;
     outline-offset: 3px;
 }
+.chat__notice {
+    margin: 8px 16px;
+    padding: 12px;
+    border-radius: 12px;
+    background: #fefce8;
+    color: #854d0e;
+    font-size: 13px;
+}

@@ -15,20 +15,31 @@ const (
 
 	ScopeRequestsRead  = "requests:read"
 	ScopeRequestsWrite = "requests:write"
+
+	ScopeTeamRead      = "onboarding:team:read"
+	ScopeAnalyticsTeam = "analytics:team"
 )
 
 const (
-	RoleIntern = "intern"
-	RoleMentor = "mentor"
-	RoleHR     = "hr"
-	RoleAdmin  = "admin"
+	RoleIntern  = "intern"
+	RoleMentor  = "mentor"
+	RoleManager = "manager"
+	RoleHR      = "hr"
+	RoleAdmin   = "admin"
 )
 
 var roleScopes = map[string][]string{
 	RoleIntern: {ScopePlanRead, ScopePlanWrite, ScopeChat, ScopeKBRead},
-	RoleMentor: {ScopePlanRead, ScopePlanWrite, ScopeChat, ScopeKBRead},
-	RoleHR:     {ScopePlanRead, ScopeKBRead, ScopeRequestsRead, ScopeRequestsWrite},
-	RoleAdmin:  {ScopeAll},
+	RoleMentor: {ScopePlanRead, ScopePlanWrite, ScopeChat, ScopeKBRead, ScopeTeamRead, ScopeAnalyticsTeam},
+	RoleManager: {
+		ScopePlanRead, ScopePlanWrite, ScopeChat, ScopeKBRead,
+		ScopeTeamRead, ScopeAnalyticsTeam, ScopeRequestsRead, ScopeRequestsWrite,
+	},
+	RoleHR: {
+		ScopePlanRead, ScopeKBRead, ScopeTeamRead, ScopeAnalyticsTeam,
+		ScopeRequestsRead, ScopeRequestsWrite,
+	},
+	RoleAdmin: {ScopeAll},
 }
 
 func ScopesForRole(role string) []string {

@@ -3,13 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { login } from './api';
 import { useAuthStore } from './authStore';
 import { demoUsers } from './demoUsers';
-
-const roleLabels = {
-  intern: 'Стажёр',
-  mentor: 'Наставник',
-  hr: 'HR',
-  admin: 'Администратор',
-} as const;
+import { roleLabels } from './types';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -21,9 +15,13 @@ export function LoginPage() {
   async function signIn(value: string) {
     setLoading(true);
     setError('');
+
     try {
-      setSession(await login(value));
-      await navigate({ to: '/map' });
+      const session = await login(value);
+      setSession(session);
+
+      const home = session.user.role === 'intern' ? '/map' : '/dashboard';
+      await navigate({ to: home });
     } catch {
       setError('Не удалось войти. Проверьте почту.');
     } finally {

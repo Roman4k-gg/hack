@@ -53,7 +53,7 @@ func (h *Handler) Me() http.HandlerFunc {
 			return
 		}
 
-		user, err := h.service.Me(r.Context(), principal.UserID)
+		user, err := h.service.Me(r.Context(), principal.UserID, principal.Scopes)
 		if err != nil {
 			writeServiceError(w, r, err)
 			return

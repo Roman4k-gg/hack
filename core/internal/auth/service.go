@@ -20,16 +20,17 @@ var (
 )
 
 type User struct {
-	ID         string `json:"id"`
-	Email      string `json:"email"`
-	FullName   string `json:"full_name"`
-	Role       string `json:"role"`
-	Position   string `json:"position"`
-	TeamID     string `json:"team_id,omitempty"`
-	TeamName   string `json:"team_name,omitempty"`
-	TeamSlug   string `json:"team_slug,omitempty"`
-	MentorID   string `json:"mentor_id,omitempty"`
-	MentorName string `json:"mentor_name,omitempty"`
+	ID         string   `json:"id"`
+	Email      string   `json:"email"`
+	FullName   string   `json:"full_name"`
+	Role       string   `json:"role"`
+	Position   string   `json:"position"`
+	TeamID     string   `json:"team_id,omitempty"`
+	TeamName   string   `json:"team_name,omitempty"`
+	TeamSlug   string   `json:"team_slug,omitempty"`
+	MentorID   string   `json:"mentor_id,omitempty"`
+	MentorName string   `json:"mentor_name,omitempty"`
+	Scopes     []string `json:"scopes"`
 }
 
 type UserStore interface {
@@ -134,6 +135,8 @@ func (s *Service) Login(ctx context.Context, email string) (Session, error) {
 		return Session{}, err
 	}
 
+	user.Scopes = rbac.ScopesForRole(user.Role)
+
 	return Session{
 		Token:     token,
 		TokenType: "Bearer",
@@ -142,10 +145,18 @@ func (s *Service) Login(ctx context.Context, email string) (Session, error) {
 	}, nil
 }
 
-func (s *Service) Me(ctx context.Context, userID string) (User, error) {
+func (s *Service) Me(ctx context.Context, userID string, scopes []string) (User, error) {
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
 		return User{}, ErrUserNotFound
 	}
-	return s.store.UserByID(ctx, userID)
+
+	user, err := s.store.UserByID(ctx, userID)
+	if err != nil {
+		return User{}, err
+	}
+
+	user.Scopes = scopes
+
+	return user, nil
 }

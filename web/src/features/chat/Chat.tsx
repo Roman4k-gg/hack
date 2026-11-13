@@ -1,5 +1,5 @@
 import { useChatStore } from './chatStore';
-import { useMockChat } from './hooks/useMockChat.ts';
+import { useChatSession } from './hooks/useChatSession.ts';
 import { MessageList } from './components/MessageList';
 import { Composer } from './components/Composer';
 import { StreamingIndicator } from './components/StreamingIndicator';
@@ -9,7 +9,7 @@ export function Chat() {
     const messages = useChatStore((state) => state.messages);
     const status = useChatStore((state) => state.status);
     const error = useChatStore((state) => state.error);
-    const { send, stop, retry } = useMockChat();
+    const { send, stop, retry, mode } = useChatSession();
 
     const busy = status === 'loading' || status === 'streaming';
 
@@ -22,6 +22,13 @@ export function Chat() {
 
     return (
         <section className="chat">
+            {mode === 'demo' && (
+                <div className="chat__notice" role="status">
+                    AI-сервис недоступен — показан демо-режим без обращения к
+                    бэкенду.
+                </div>
+            )}
+
             {messages.length === 0 ? (
                 <div className="chat__empty">
                     <h2>Привет! Я AI-buddy</h2>

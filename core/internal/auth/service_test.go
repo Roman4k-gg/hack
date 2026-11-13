@@ -101,14 +101,15 @@ func TestServiceMeReturnsProfile(t *testing.T) {
 
 	service := NewService(newFakeUserStore(demoUser()), manager)
 
-	user, err := service.Me(context.Background(), demoUser().ID)
+	user, err := service.Me(context.Background(), demoUser().ID, []string{"profile:self"})
 	require.NoError(t, err)
 	require.Equal(t, "Дарья Соколова", user.FullName)
 	require.Equal(t, "Пётр Иванов", user.MentorName)
+	require.Equal(t, []string{"profile:self"}, user.Scopes)
 
-	_, err = service.Me(context.Background(), "unknown-id")
+	_, err = service.Me(context.Background(), "unknown-id", nil)
 	require.ErrorIs(t, err, ErrUserNotFound)
 
-	_, err = service.Me(context.Background(), "  ")
+	_, err = service.Me(context.Background(), "  ", nil)
 	require.ErrorIs(t, err, ErrUserNotFound)
 }
