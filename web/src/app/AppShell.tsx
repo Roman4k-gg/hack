@@ -21,8 +21,12 @@ export function AppShell() {
   const scopes = user?.scopes ?? [];
   const canSeeTeam = scopes.includes(TEAM_SCOPE) || scopes.includes('*');
 
+  const isIntern = user?.role === 'intern';
+
   const navItems = [
-    { to: '/map', label: 'Карта', icon: MapIcon, color: 'bg-brand-soft' },
+    ...(isIntern
+      ? [{ to: '/map', label: 'Карта', icon: MapIcon, color: 'bg-brand-soft' }]
+      : []),
     { to: '/', label: 'Чат', icon: MessageCircle, color: 'bg-azure-soft' },
     {
       to: '/requests',
