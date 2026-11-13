@@ -8,6 +8,7 @@ import (
 	"ai-buddy/core/internal/platform/db"
 	"ai-buddy/core/internal/platform/logging"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -24,10 +25,26 @@ func TestRecorderWritesAuditLogAndEvents(t *testing.T) {
 
 	require.NoError(t, store.Migrate(ctx))
 
+	actorID := uuid.NewString()
+	actorEmail := "audit-test-" + actorID[:8] + "@demo.local"
+
+	_, err = store.Pool().Exec(ctx, `
+		INSERT INTO users (id, email, full_name, role, position)
+		VALUES ($1, $2, 'Audit Test', 'admin', 'CI')
+		ON CONFLICT (id) DO NOTHING`,
+		actorID, actorEmail,
+	)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		cleanupCtx := context.Background()
+		_, _ = store.Pool().Exec(cleanupCtx, `DELETE FROM audit_log WHERE actor_id = $1`, actorID)
+		_, _ = store.Pool().Exec(cleanupCtx, `DELETE FROM events WHERE user_id = $1`, actorID)
+		_, _ = store.Pool().Exec(cleanupCtx, `DELETE FROM users WHERE id = $1`, actorID)
+	})
+
 	logger := logging.New("error", "audit-test")
 	recorder := New(store.Pool(), logger)
-
-	actorID := "22222222-2222-2222-2222-222222222224"
 
 	require.NoError(t, recorder.Record(ctx, Entry{
 		ActorID:    actorID,
