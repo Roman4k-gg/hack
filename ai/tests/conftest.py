@@ -7,6 +7,7 @@ from app.auth import User
 
 SECRET = "dev-secret-change-me"
 
+
 def make_token(role: str = "intern", scopes: list[str] | None = None, **extra) -> str:
     claims = {
         "sub": "22222222-2222-2222-2222-222222222224",
@@ -21,6 +22,7 @@ def make_token(role: str = "intern", scopes: list[str] | None = None, **extra) -
     }
     claims.update(extra)
     return jwt.encode(claims, SECRET, algorithm="HS256")
+
 
 @pytest.fixture
 def intern() -> User:

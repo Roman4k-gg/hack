@@ -11,6 +11,7 @@ from app.main import app
 from app.providers import MockProvider
 from tests.conftest import make_token
 
+
 def parse_stream(body: str) -> list[dict]:
     events = []
     for block in body.strip().split("\n\n"):
@@ -18,6 +19,7 @@ def parse_stream(body: str) -> list[dict]:
         assert lines[0] == "event: message"
         events.append(json.loads(lines[1][len("data: ") :]))
     return events
+
 
 @pytest.fixture
 def client():
@@ -29,11 +31,13 @@ def client():
     yield TestClient(app)
     app.dependency_overrides.clear()
 
+
 def test_health(client: TestClient):
     assert client.get("/healthz").json() == {"status": "ok"}
     ready = client.get("/readyz").json()
     assert ready["status"] == "ok"
     assert ready["llm_mode"] == "mock"
+
 
 def test_chat_streams_sse(client: TestClient):
     response = client.post(
@@ -49,6 +53,7 @@ def test_chat_streams_sse(client: TestClient):
     assert events[-1] == {"type": "done"}
     assert "Привет" in "".join(e["text"] for e in events if e["type"] == "delta")
 
+
 @pytest.mark.parametrize(
     "header",
     [None, "Basic abc", "Bearer not-a-jwt", f"Bearer {make_token(iss='someone-else')}"],
@@ -58,6 +63,7 @@ def test_chat_requires_valid_token(client: TestClient, header):
     response = client.post("/api/v1/chat/stream", json={"message": "hi"}, headers=headers)
     assert response.status_code == 401
 
+
 def test_chat_rejects_empty_message(client: TestClient):
     response = client.post(
         "/api/v1/chat/stream",
@@ -65,6 +71,7 @@ def test_chat_rejects_empty_message(client: TestClient):
         headers={"Authorization": f"Bearer {make_token()}"},
     )
     assert response.status_code == 422
+
 
 def test_chat_unexpected_error_becomes_error_event(client: TestClient):
     class Broken:
@@ -79,6 +86,7 @@ def test_chat_unexpected_error_becomes_error_event(client: TestClient):
         headers={"Authorization": f"Bearer {make_token()}"},
     )
     assert parse_stream(response.text) == [{"type": "error", "message": INTERNAL_ERROR_TEXT}]
+
 
 def test_get_agent_builds_from_settings():
     get_agent.cache_clear()

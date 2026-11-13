@@ -4,9 +4,11 @@ import pytest
 from app.agent.tools import CoreClient, ToolRegistry
 from app.auth import User
 
+
 def registry_with(handler) -> ToolRegistry:
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     return ToolRegistry(CoreClient("http://core.test/", client=client))
+
 
 async def test_get_onboarding_plan_forwards_user_token(intern: User):
     seen = {}
@@ -26,12 +28,14 @@ async def test_get_onboarding_plan_forwards_user_token(intern: User):
     }
     assert result.for_model() == {"ok": True, "result": result.data}
 
+
 async def test_get_my_profile(intern: User):
     result = await registry_with(lambda request: httpx.Response(200, json={"role": "intern"})).call(
         "get_my_profile", {}, intern
     )
     assert result.ok
     assert result.data == {"role": "intern"}
+
 
 @pytest.mark.parametrize(
     ("status", "code"),
@@ -45,11 +49,13 @@ async def test_core_errors_are_mapped(intern: User, status: int, code: str):
     assert result.error_code == code
     assert result.for_model()["error"]["code"] == code
 
+
 async def test_core_bad_json(intern: User):
     result = await registry_with(lambda request: httpx.Response(200, text="not json")).call(
         "get_onboarding_plan", {}, intern
     )
     assert result.error_code == "UPSTREAM_ERROR"
+
 
 @pytest.mark.parametrize(
     ("exc", "code"),
@@ -62,9 +68,11 @@ async def test_core_network_errors(intern: User, exc, code: str):
     result = await registry_with(handler).call("get_onboarding_plan", {}, intern)
     assert result.error_code == code
 
+
 async def test_unknown_tool_is_forbidden(intern: User):
     result = await registry_with(lambda request: httpx.Response(200)).call("drop_db", {}, intern)
     assert result.error_code == "FORBIDDEN"
+
 
 async def test_tools_filtered_by_scope():
     registry = registry_with(lambda request: httpx.Response(200, json={}))
@@ -78,6 +86,7 @@ async def test_tools_filtered_by_scope():
     }
     result = await registry.call("get_onboarding_plan", {}, no_plan)
     assert result.error_code == "FORBIDDEN"
+
 
 async def test_core_client_without_injected_client(intern: User, monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
