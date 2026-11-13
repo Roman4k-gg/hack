@@ -50,7 +50,7 @@ export function AppShell() {
 
   return (
     <div className="flex min-h-screen bg-paper">
-      <aside className="flex w-16 flex-col items-center gap-3 border-r border-line py-4">
+      <aside className="sticky top-0 flex h-screen w-16 shrink-0 flex-col items-center gap-3 self-start border-r border-line py-4">
         <div className="flex h-10 w-10 items-center justify-center bg-ink text-sm font-extrabold text-brand">
           AI
         </div>
