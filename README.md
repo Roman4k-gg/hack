@@ -106,6 +106,12 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
   -H 'Content-Type: application/json' -d '{"email":"dasha@demo.local"}'
 ```
 
+## Документация
+
+- [`docs/api-contract.md`](docs/api-contract.md) — контракт между бэкендом и
+  фронтендом: что принимает core, что ждёт web, JWT и скоупы, формат ошибок,
+  SSE-события, формулы метрик.
+
 ## Демо-аккаунты
 
 Пароля нет: mock-логин по email, любой пользователь из базы получает JWT.
