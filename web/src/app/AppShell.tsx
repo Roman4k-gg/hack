@@ -1,16 +1,32 @@
 import { Link, Outlet, useNavigate } from '@tanstack/react-router';
-import { LogOut, MapIcon, MessageCircle } from 'lucide-react';
+import { LogOut, MapIcon, MessageCircle, Users } from 'lucide-react';
 import { useAuthStore } from '@/features/auth/authStore';
+import { roleLabels } from '@/features/auth/types';
 
-const navItems = [
-  { to: '/map', label: 'Карта', icon: MapIcon, color: 'bg-brand' },
-  { to: '/', label: 'Чат', icon: MessageCircle, color: 'bg-azure' },
-] as const;
+const TEAM_SCOPE = 'onboarding:team:read';
 
 export function AppShell() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+
+  const scopes = user?.scopes ?? [];
+  const canSeeTeam = scopes.includes(TEAM_SCOPE) || scopes.includes('*');
+
+  const navItems = [
+    { to: '/map', label: 'Карта', icon: MapIcon, color: 'bg-brand' },
+    { to: '/', label: 'Чат', icon: MessageCircle, color: 'bg-azure' },
+    ...(canSeeTeam
+      ? [
+          {
+            to: '/dashboard',
+            label: 'Команда',
+            icon: Users,
+            color: 'bg-iris',
+          },
+        ]
+      : []),
+  ];
 
   function onLogout() {
     logout();
@@ -52,6 +68,15 @@ export function AppShell() {
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col px-7 py-7">
+        {user && (
+          <header className="mb-5 flex items-baseline justify-between gap-4 border-b border-line pb-3">
+            <p className="text-sm font-bold">{user.full_name}</p>
+            <p className="text-xs text-muted">
+              {roleLabels[user.role]}
+              {user.team_name ? ` · ${user.team_name}` : ''}
+            </p>
+          </header>
+        )}
         <Outlet />
       </main>
     </div>

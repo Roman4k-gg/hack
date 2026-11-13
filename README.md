@@ -113,9 +113,19 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
 | Email               | Роль     | Команда   | Наставник    |
 |---------------------|----------|-----------|--------------|
 | `dasha@demo.local`  | intern   | Search    | Пётр Иванов  |
-| `masha@demo.local`  | intern   | Ads       | —             |
+| `masha@demo.local`  | intern   | Ads       | Игорь Белов  |
+| `timur@demo.local`  | intern   | Search    | Пётр Иванов  |
+| `vera@demo.local`   | intern   | Ads       | Игорь Белов  |
+| `sonya@demo.local`  | intern   | Platform  | —             |
+| `kirill@demo.local` | intern   | Search    | Пётр Иванов  |
 | `petr@demo.local`   | mentor   | Search    | —             |
+| `igor@demo.local`   | mentor   | Ads       | —             |
+| `olga@demo.local`   | manager  | Search    | —             |
+| `marina@demo.local` | hr       | —         | —             |
 | `admin@demo.local`  | admin    | Platform  | —             |
+
+Интерфейс разный по роли: стажёр после входа попадает на свою карту адаптации,
+наставник, руководитель, HR и администратор — на дашборд команды с метриками.
 
 ## API
 
@@ -128,6 +138,8 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
 | GET   | `/api/v1/me`                     | `Authorization: Bearer`  | профиль текущего пользователя         |
 | GET   | `/api/v1/onboarding/plan`        | скоуп `onboarding:plan:read`  | этапы, пункты, прогресс, `next_step` |
 | PATCH | `/api/v1/onboarding/items/{id}`  | скоуп `onboarding:plan:write` | смена статуса пункта             |
+| GET   | `/api/v1/team/interns`           | скоуп `onboarding:team:read` | стажёры с метриками и сводка       |
+| GET   | `/api/v1/team/overview`          | скоуп `analytics:team`   | сводные метрики по команде            |
 | POST  | `/api/v1/chat/stream`            | скоуп `chat:use`          | SSE-прокси к AI-сервису               |
 
 Смена статуса пункта:

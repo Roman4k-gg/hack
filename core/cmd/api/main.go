@@ -19,6 +19,7 @@ import (
 	"ai-buddy/core/internal/platform/logging"
 	"ai-buddy/core/internal/platform/ratelimit"
 	"ai-buddy/core/internal/platform/redis"
+	"ai-buddy/core/internal/team"
 )
 
 func main() {
@@ -73,6 +74,9 @@ func main() {
 	onboardingService := onboarding.NewService(onboarding.NewPostgresPlanStore(store.Pool()), recorder, logger)
 	onboardingHandler := onboarding.NewHandler(onboardingService, logger)
 
+	teamService := team.NewService(team.NewPostgresStore(store.Pool()))
+	teamHandler := team.NewHandler(teamService, logger)
+
 	limiter := ratelimit.New(ratelimit.NewRedisBackend(cache.Client()), cfg.RateLimitRPS)
 	chatService := chat.NewService(chat.Config{
 		AIURL:   cfg.AIURL,
@@ -86,6 +90,7 @@ func main() {
 		Auth:       authHandler,
 		Onboarding: onboardingHandler,
 		Chat:       chatHandler,
+		Team:       teamHandler,
 		Tokens:     tokens,
 	}))
 

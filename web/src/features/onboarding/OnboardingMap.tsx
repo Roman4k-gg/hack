@@ -1,10 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { cn } from '@/lib/utils';
-import { fetchPlan } from './api';
-import type { Plan } from './types';
+import { fetchPlan, updateItemStatus } from './api';
+import type { ItemStatus, Plan } from './types';
 
 const stageColors = [
   'bg-brand-soft',
@@ -14,19 +14,75 @@ const stageColors = [
 ];
 
 export function OnboardingMap() {
+  const queryClient = useQueryClient();
+
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['onboarding-plan'],
     queryFn: fetchPlan,
   });
 
+  const mutation = useMutation({
+    mutationFn: ({
+      itemId,
+      status,
+      reason,
+    }: {
+      itemId: string;
+      status: ItemStatus;
+      reason?: string;
+    }) => updateItemStatus(itemId, status, reason),
+    onMutate: async ({ itemId, status }) => {
+      await queryClient.cancelQueries({ queryKey: ['onboarding-plan'] });
+
+      const previous = queryClient.getQueryData<Plan>(['onboarding-plan']);
+
+      queryClient.setQueryData<Plan>(['onboarding-plan'], (old) =>
+        old ? applyStatus(old, itemId, status) : old,
+      );
+
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['onboarding-plan'], context.previous);
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['onboarding-plan'] });
+    },
+  });
+
+  function changeStatus(
+    itemId: string,
+    status: ItemStatus,
+    title: string,
+  ) {
+    let reason: string | undefined;
+
+    if (status === 'blocked') {
+      const input = window.prompt(
+        `Почему пункт «${title}» заблокирован? Причина попадёт в карту и в аудит.`,
+        'Ждём подтверждения от HR',
+      );
+
+      if (!input) {
+        return;
+      }
+
+      reason = input;
+    }
+
+    mutation.mutate({ itemId, status, reason });
+  }
+
   if (isPending) {
     return <MapSkeleton />;
   }
 
-  if (isError) {
+  if (isError || !data) {
     return (
       <div>
-        <p>Не удалось загрузить карту. Попробуйте ещё раз.</p>
+        <p>Не удалось загрузить карту. Проверьте подключение к API.</p>
         <button
           className="mt-3 bg-ink px-4 py-2 text-sm font-bold text-paper"
           onClick={() => refetch()}
@@ -37,7 +93,29 @@ export function OnboardingMap() {
     );
   }
 
-  return <PlanView plan={data} />;
+  return <PlanView plan={data} onChangeStatus={changeStatus} />;
+}
+
+function applyStatus(plan: Plan, itemId: string, status: ItemStatus): Plan {
+  const stages = plan.stages.map((stage) => ({
+    ...stage,
+    items: stage.items.map((item) =>
+      item.id === itemId ? { ...item, status } : item,
+    ),
+  }));
+
+  const allItems = stages.flatMap((stage) => stage.items);
+  const done = allItems.filter((item) => item.status === 'done').length;
+
+  return {
+    ...plan,
+    stages,
+    progress: {
+      done,
+      total: allItems.length,
+      percent: allItems.length > 0 ? Math.round((done / allItems.length) * 100) : 0,
+    },
+  };
 }
 
 function MapSkeleton() {
@@ -58,7 +136,13 @@ function MapSkeleton() {
   );
 }
 
-function PlanView({ plan }: { plan: Plan }) {
+function PlanView({
+  plan,
+  onChangeStatus,
+}: {
+  plan: Plan;
+  onChangeStatus: (itemId: string, status: ItemStatus, title: string) => void;
+}) {
   if (plan.stages.length === 0) {
     return (
       <EmptyState
@@ -130,6 +214,30 @@ function PlanView({ plan }: { plan: Plan }) {
                       </span>
                     )}
                   </div>
+                  <div className="mt-2 flex flex-wrap gap-1 pt-1">
+                    {item.status !== 'in_progress' && (
+                      <StatusAction
+                        label="В работу"
+                        onClick={() =>
+                          onChangeStatus(item.id, 'in_progress', item.title)
+                        }
+                      />
+                    )}
+                    {item.status !== 'done' && (
+                      <StatusAction
+                        label="Готово"
+                        onClick={() => onChangeStatus(item.id, 'done', item.title)}
+                      />
+                    )}
+                    {item.status !== 'blocked' && (
+                      <StatusAction
+                        label="Блокер"
+                        onClick={() =>
+                          onChangeStatus(item.id, 'blocked', item.title)
+                        }
+                      />
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -137,5 +245,23 @@ function PlanView({ plan }: { plan: Plan }) {
         ))}
       </div>
     </section>
+  );
+}
+
+function StatusAction({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="bg-mist px-2 py-0.5 text-[11px] font-bold text-muted hover:bg-line"
+    >
+      {label}
+    </button>
   );
 }

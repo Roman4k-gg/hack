@@ -9,7 +9,7 @@ export const itemStatusSchema = z.enum([
 ]);
 export type ItemStatus = z.infer<typeof itemStatusSchema>;
 
-const planItemSchema = z.object({
+export const planItemSchema = z.object({
   id: z.string(),
   title: z.string(),
   description: z.string(),
@@ -48,3 +48,5 @@ export const planSchema = z.object({
 });
 
 export type Plan = z.infer<typeof planSchema>;
+export type PlanStage = z.infer<typeof planStageSchema>;
+export type PlanItem = z.infer<typeof planItemSchema>;

@@ -73,7 +73,7 @@ func newTestRouter(t *testing.T, aiURL string) (http.Handler, *auth.TokenManager
 		StartsOn:  time.Now(),
 		Stages:    []onboarding.Stage{},
 		Progress:  onboarding.Progress{Done: 1, Total: 2, Percent: 50},
-		NextStep:  &onboarding.Item{ID: "item-1", Title: "Получить доступ к Jira"},
+		NextStep:  &onboarding.NextStep{ItemID: "item-1", Title: "Получить доступ к Jira", Reason: "Обязательный пункт"},
 		UpdatedAt: time.Now(),
 	}
 	onboardingHandler := onboarding.NewHandler(

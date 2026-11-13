@@ -61,13 +61,27 @@ type Stage struct {
 	Progress    Progress `json:"progress"`
 }
 
+type Intern struct {
+	ID       string `json:"id"`
+	FullName string `json:"full_name"`
+	TeamName string `json:"team_name"`
+	Position string `json:"position,omitempty"`
+}
+
+type NextStep struct {
+	ItemID string `json:"item_id"`
+	Title  string `json:"title"`
+	Reason string `json:"reason"`
+}
+
 type Plan struct {
 	ID        string    `json:"id"`
 	Title     string    `json:"title"`
 	StartsOn  time.Time `json:"starts_on"`
 	Stages    []Stage   `json:"stages"`
 	Progress  Progress  `json:"progress"`
-	NextStep  *Item     `json:"next_step,omitempty"`
+	NextStep  *NextStep `json:"next_step"`
+	Intern    Intern    `json:"intern"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
@@ -92,11 +106,23 @@ func (s *PostgresPlanStore) PlanByUserID(ctx context.Context, userID string) (Pl
 
 	var plan Plan
 	err := s.pool.QueryRow(ctx, `
-		SELECT id::text, title, starts_on, updated_at
-		  FROM onboarding_plans
-		 WHERE user_id::text = $1`,
+		SELECT p.id::text, p.title, p.starts_on, p.updated_at,
+		       u.id::text, u.full_name, COALESCE(u.position, ''), COALESCE(t.name, '')
+		  FROM onboarding_plans p
+		  JOIN users u ON u.id = p.user_id
+		  LEFT JOIN teams t ON t.id = u.team_id
+		 WHERE p.user_id::text = $1`,
 		userID,
-	).Scan(&plan.ID, &plan.Title, &plan.StartsOn, &plan.UpdatedAt)
+	).Scan(
+		&plan.ID,
+		&plan.Title,
+		&plan.StartsOn,
+		&plan.UpdatedAt,
+		&plan.Intern.ID,
+		&plan.Intern.FullName,
+		&plan.Intern.Position,
+		&plan.Intern.TeamName,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Plan{}, ErrPlanNotFound
 	}
@@ -303,14 +329,20 @@ func progressOf(items []Item) Progress {
 	return progress
 }
 
-func nextStepOf(stages []Stage) *Item {
+func nextStepOf(stages []Stage) *NextStep {
 	for _, stage := range stages {
 		for _, item := range stage.Items {
 			if item.Status == "done" || item.Status == "skipped" {
 				continue
 			}
-			current := item
-			return &current
+
+			reason := "Обязательный пункт этапа «" + stage.Title + "»"
+
+			if item.Status == "blocked" {
+				reason = "Пункт заблокирован: " + item.BlockedReason
+			}
+
+			return &NextStep{ItemID: item.ID, Title: item.Title, Reason: reason}
 		}
 	}
 	return nil

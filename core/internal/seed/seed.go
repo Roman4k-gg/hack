@@ -3,8 +3,10 @@ package seed
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -18,10 +20,17 @@ const (
 	teamAds      = "11111111-1111-1111-1111-111111111112"
 	teamPlatform = "11111111-1111-1111-1111-111111111113"
 
-	userPetr  = "22222222-2222-2222-2222-222222222221"
-	userAdmin = "22222222-2222-2222-2222-222222222222"
-	userMasha = "22222222-2222-2222-2222-222222222223"
-	userDasha = "22222222-2222-2222-2222-222222222224"
+	userPetr   = "22222222-2222-2222-2222-222222222221"
+	userAdmin  = "22222222-2222-2222-2222-222222222222"
+	userMasha  = "22222222-2222-2222-2222-222222222223"
+	userDasha  = "22222222-2222-2222-2222-222222222224"
+	userIgor   = "22222222-2222-2222-2222-222222222225"
+	userOlga   = "22222222-2222-2222-2222-222222222226"
+	userMarina = "22222222-2222-2222-2222-222222222227"
+	userTimur  = "22222222-2222-2222-2222-222222222228"
+	userVera   = "22222222-2222-2222-2222-222222222229"
+	userSonya  = "22222222-2222-2222-2222-222222222230"
+	userKirill = "22222222-2222-2222-2222-222222222231"
 
 	planDasha = "33333333-3333-3333-3333-333333333331"
 
@@ -30,6 +39,28 @@ const (
 	stageProcesses   = "33333333-3333-3333-3333-333333333343"
 	stageFirstTasks  = "33333333-3333-3333-3333-333333333344"
 )
+
+var fixedStageIDs = []string{stageEnvironment, stageTeam, stageProcesses, stageFirstTasks}
+
+var stageTemplates = []stageTemplate{
+	{title: "Неделя 1 · Окружение", description: "Доступы, ноутбук и рабочее окружение."},
+	{title: "Неделя 1 · Команда", description: "Знакомство с командой и наставником."},
+	{title: "Неделя 2 · Процессы", description: "Как устроены разработка, ревью и релизы."},
+	{title: "Месяц 1 · Первые задачи", description: "Первый вклад в продукт."},
+}
+
+var itemTemplates = []itemTemplate{
+	{stageIndex: 0, title: "Получить ноутбук и доступ к VPN", description: "Выдаёт IT-отдел, доступ приходит на рабочую почту.", kind: "access", position: 1, dueInDays: -2},
+	{stageIndex: 0, title: "Настроить рабочее окружение", description: "Go, Docker, редактор и доступы к репозиторию.", kind: "task", position: 2, dueInDays: -1},
+	{stageIndex: 0, title: "Получить доступ к Jira", description: "Нужен для работы с задачами команды.", kind: "access", position: 3, dueInDays: 1},
+	{stageIndex: 1, title: "Познакомиться с командой", description: "Представиться в командном чате и на дейлике.", kind: "meeting", position: 1, dueInDays: -1},
+	{stageIndex: 1, title: "Встреча 1:1 с наставником", description: "Обсудить ожидания, цели на месяц и формат поддержки.", kind: "meeting", position: 2, dueInDays: 0},
+	{stageIndex: 1, title: "Прочитать гайд по код-ревью", description: "Правила ревью, размер PR и работа с комментариями.", kind: "doc", position: 3, dueInDays: 2},
+	{stageIndex: 2, title: "Пройти курс по безопасности", description: "Обязательный курс для всех новых сотрудников.", kind: "task", position: 1, dueInDays: 3},
+	{stageIndex: 2, title: "Разобраться с процессом релизов", description: "Как устроены ветки, стенды и деплой.", kind: "doc", position: 2, dueInDays: 4},
+	{stageIndex: 2, title: "Сделать первый PR", description: "Небольшая правка с ревью наставника.", kind: "task", position: 3, dueInDays: 5},
+	{stageIndex: 3, title: "Взять первую задачу из бэклога", description: "Задача с меткой good first issue в команде.", kind: "task", position: 1, dueInDays: 10},
+}
 
 type team struct {
 	id   string
@@ -47,23 +78,28 @@ type user struct {
 	position string
 }
 
-type stage struct {
-	id          string
+type stageTemplate struct {
 	title       string
 	description string
-	position    int
 }
 
-type item struct {
-	id            string
-	stageID       string
-	title         string
-	description   string
-	kind          string
-	status        string
-	blockedReason string
-	position      int
-	dueInDays     int
+type itemTemplate struct {
+	stageIndex  int
+	title       string
+	description string
+	kind        string
+	position    int
+	dueInDays   int
+}
+
+type internPlan struct {
+	userID       string
+	planID       string
+	title        string
+	startsInDays int
+	fixedIDs     bool
+	statuses     []string
+	blockedText  string
 }
 
 type document struct {
@@ -147,11 +183,43 @@ func seedUsers(ctx context.Context, tx pgx.Tx) error {
 			role: "admin", teamID: teamPlatform, position: "Platform team",
 		},
 		{
+			id: userIgor, email: "igor@demo.local", fullName: "Игорь Белов",
+			role: "mentor", teamID: teamAds, position: "Ведущий разработчик",
+		},
+		{
 			id: userMasha, email: "masha@demo.local", fullName: "Мария Кузнецова",
-			role: "intern", teamID: teamAds, position: "Стажёр-разработчик",
+			role: "intern", teamID: teamAds, mentorID: userIgor,
+			position: "Стажёр-разработчик",
 		},
 		{
 			id: userDasha, email: "dasha@demo.local", fullName: "Дарья Соколова",
+			role: "intern", teamID: teamSearch, mentorID: userPetr,
+			position: "Стажёр-разработчик",
+		},
+		{
+			id: userOlga, email: "olga@demo.local", fullName: "Ольга Кузнецова",
+			role: "manager", teamID: teamSearch, position: "Руководитель команды",
+		},
+		{
+			id: userMarina, email: "marina@demo.local", fullName: "Марина Белова",
+			role: "hr", position: "HR-партнёр",
+		},
+		{
+			id: userTimur, email: "timur@demo.local", fullName: "Тимур Абрамов",
+			role: "intern", teamID: teamSearch, mentorID: userPetr,
+			position: "Стажёр-разработчик",
+		},
+		{
+			id: userVera, email: "vera@demo.local", fullName: "Вера Соколова",
+			role: "intern", teamID: teamAds, mentorID: userIgor,
+			position: "Стажёр-разработчик",
+		},
+		{
+			id: userSonya, email: "sonya@demo.local", fullName: "Соня Лебедева",
+			role: "intern", teamID: teamPlatform, position: "Стажёр-разработчик",
+		},
+		{
+			id: userKirill, email: "kirill@demo.local", fullName: "Кирилл Морозов",
 			role: "intern", teamID: teamSearch, mentorID: userPetr,
 			position: "Стажёр-разработчик",
 		},
@@ -161,6 +229,11 @@ func seedUsers(ctx context.Context, tx pgx.Tx) error {
 		var mentor any
 		if u.mentorID != "" {
 			mentor = u.mentorID
+		}
+
+		var team any
+		if u.teamID != "" {
+			team = u.teamID
 		}
 
 		_, err := tx.Exec(ctx, `
@@ -173,7 +246,7 @@ func seedUsers(ctx context.Context, tx pgx.Tx) error {
 			    team_id = EXCLUDED.team_id,
 			    mentor_id = EXCLUDED.mentor_id,
 			    position = EXCLUDED.position`,
-			u.id, u.email, u.fullName, u.role, u.teamID, mentor, u.position,
+			u.id, u.email, u.fullName, u.role, team, mentor, u.position,
 		)
 		if err != nil {
 			return fmt.Errorf("seed: upsert user %s: %w", u.email, err)
@@ -183,108 +256,131 @@ func seedUsers(ctx context.Context, tx pgx.Tx) error {
 }
 
 func seedOnboarding(ctx context.Context, tx pgx.Tx) error {
-	startsOn := time.Now().AddDate(0, 0, -3)
+	profiles := []internPlan{
+		{
+			userID: userDasha, planID: planDasha, fixedIDs: true,
+			title: "Адаптация в команде Search", startsInDays: -3,
+			statuses: []string{
+				"done", "done", "in_progress", "done", "done",
+				"pending", "blocked", "pending", "in_progress", "pending",
+			},
+			blockedText: "Ждём подтверждения от HR",
+		},
+		{
+			userID: userMasha, title: "Адаптация в команде Ads", startsInDays: -12,
+			statuses: []string{
+				"done", "done", "done", "done", "in_progress",
+				"pending", "pending", "pending", "pending", "pending",
+			},
+			blockedText: "",
+		},
+		{
+			userID: userTimur, title: "Адаптация в команде Search", startsInDays: -6,
+			statuses: []string{
+				"done", "done", "done", "done", "done",
+				"done", "in_progress", "pending", "pending", "pending",
+			},
+			blockedText: "",
+		},
+		{
+			userID: userVera, title: "Адаптация в команде Ads", startsInDays: -9,
+			statuses: []string{
+				"blocked", "pending", "pending", "pending", "pending",
+				"pending", "pending", "pending", "pending", "pending",
+			},
+			blockedText: "Не подтверждён доступ к VPN",
+		},
+		{
+			userID: userSonya, title: "Адаптация в команде Platform", startsInDays: -1,
+			statuses: []string{
+				"done", "in_progress", "pending", "pending", "pending",
+				"pending", "pending", "pending", "pending", "pending",
+			},
+			blockedText: "",
+		},
+	}
 
-	_, err := tx.Exec(ctx, `
+	for _, profile := range profiles {
+		if err := seedPlan(ctx, tx, profile); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func seedPlan(ctx context.Context, tx pgx.Tx, profile internPlan) error {
+	planID := profile.planID
+	if planID == "" {
+		planID = derivedID("plan", profile.userID)
+	}
+
+	startsOn := time.Now().AddDate(0, 0, profile.startsInDays)
+
+	if _, err := tx.Exec(ctx, `
 		INSERT INTO onboarding_plans (id, user_id, title, starts_on)
 		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (id) DO UPDATE
 		SET user_id = EXCLUDED.user_id,
 		    title = EXCLUDED.title,
 		    starts_on = EXCLUDED.starts_on`,
-		planDasha, userDasha, "Адаптация в команде Search", startsOn,
-	)
-	if err != nil {
-		return fmt.Errorf("seed: upsert onboarding plan: %w", err)
+		planID, profile.userID, profile.title, startsOn,
+	); err != nil {
+		return fmt.Errorf("seed: upsert onboarding plan %s: %w", planID, err)
 	}
 
-	stages := []stage{
-		{id: stageEnvironment, title: "Неделя 1 · Окружение", description: "Доступы, ноутбук и рабочее окружение.", position: 1},
-		{id: stageTeam, title: "Неделя 1 · Команда", description: "Знакомство с командой и наставником.", position: 2},
-		{id: stageProcesses, title: "Неделя 2 · Процессы", description: "Как устроены разработка, ревью и релизы.", position: 3},
-		{id: stageFirstTasks, title: "Месяц 1 · Первые задачи", description: "Первый вклад в продукт.", position: 4},
-	}
+	stageIDs := make([]string, 0, len(stageTemplates))
 
-	for _, s := range stages {
-		_, err := tx.Exec(ctx, `
+	for index, template := range stageTemplates {
+		stageID := derivedID("stage", planID+":"+strconv.Itoa(index))
+
+		if profile.fixedIDs {
+			stageID = fixedStageIDs[index]
+		}
+
+		stageIDs = append(stageIDs, stageID)
+
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO onboarding_stages (id, plan_id, title, description, position)
 			VALUES ($1, $2, $3, $4, $5)
 			ON CONFLICT (id) DO UPDATE
 			SET title = EXCLUDED.title,
 			    description = EXCLUDED.description,
 			    position = EXCLUDED.position`,
-			s.id, planDasha, s.title, s.description, s.position,
-		)
-		if err != nil {
-			return fmt.Errorf("seed: upsert onboarding stage %s: %w", s.id, err)
+			stageID, planID, template.title, template.description, index+1,
+		); err != nil {
+			return fmt.Errorf("seed: upsert onboarding stage %s: %w", stageID, err)
 		}
 	}
 
-	items := []item{
-		{
-			id: "44444444-4444-4444-4444-444444444401", stageID: stageEnvironment,
-			title: "Получить ноутбук и доступ к VPN", description: "Выдаёт IT-отдел, доступ приходит на рабочую почту.",
-			kind: "access", status: "done", position: 1, dueInDays: -2,
-		},
-		{
-			id: "44444444-4444-4444-4444-444444444402", stageID: stageEnvironment,
-			title: "Настроить рабочее окружение", description: "Go, Docker, редактор и доступы к репозиторию.",
-			kind: "task", status: "done", position: 2, dueInDays: -1,
-		},
-		{
-			id: "44444444-4444-4444-4444-444444444403", stageID: stageEnvironment,
-			title: "Получить доступ к Jira", description: "Нужен для работы с задачами команды Search.",
-			kind: "access", status: "in_progress", position: 3, dueInDays: 1,
-		},
-		{
-			id: "44444444-4444-4444-4444-444444444404", stageID: stageTeam,
-			title: "Познакомиться с командой", description: "Представиться в командном чате и на дейлике.",
-			kind: "meeting", status: "done", position: 1, dueInDays: -1,
-		},
-		{
-			id: "44444444-4444-4444-4444-444444444405", stageID: stageTeam,
-			title: "Встреча 1:1 с наставником", description: "Обсудить ожидания, цели на месяц и формат поддержки.",
-			kind: "meeting", status: "done", position: 2, dueInDays: 0,
-		},
-		{
-			id: "44444444-4444-4444-4444-444444444406", stageID: stageTeam,
-			title: "Прочитать гайд по код-ревью", description: "Правила ревью, размер PR и работа с комментариями.",
-			kind: "doc", status: "pending", position: 3, dueInDays: 2,
-		},
-		{
-			id: "44444444-4444-4444-4444-444444444407", stageID: stageProcesses,
-			title: "Пройти курс по безопасности", description: "Обязательный курс для всех новых сотрудников.",
-			kind: "task", status: "blocked", blockedReason: "Ждём подтверждения от HR",
-			position: 1, dueInDays: 3,
-		},
-		{
-			id: "44444444-4444-4444-4444-444444444408", stageID: stageProcesses,
-			title: "Разобраться с процессом релизов", description: "Как устроены ветки, стенды и деплой.",
-			kind: "doc", status: "pending", position: 2, dueInDays: 4,
-		},
-		{
-			id: "44444444-4444-4444-4444-444444444409", stageID: stageProcesses,
-			title: "Сделать первый PR", description: "Небольшая правка с ревью наставника.",
-			kind: "task", status: "in_progress", position: 3, dueInDays: 5,
-		},
-		{
-			id: "44444444-4444-4444-4444-444444444410", stageID: stageFirstTasks,
-			title: "Взять первую задачу из бэклога", description: "Задача с меткой good first issue в команде Search.",
-			kind: "task", status: "pending", position: 1, dueInDays: 10,
-		},
-	}
+	for index, template := range itemTemplates {
+		itemID := derivedID("item", planID+":"+strconv.Itoa(index))
 
-	for _, it := range items {
+		if profile.fixedIDs {
+			itemID = fmt.Sprintf("44444444-4444-4444-4444-4444444444%02d", index+1)
+		}
+
+		status := "pending"
+		if index < len(profile.statuses) {
+			status = profile.statuses[index]
+		}
+
+		blockedReason := ""
+		if status == "blocked" {
+			blockedReason = profile.blockedText
+		}
+
 		var due any
-		if it.dueInDays != 0 {
-			due = time.Now().AddDate(0, 0, it.dueInDays)
-		}
-		var blocked any
-		if it.blockedReason != "" {
-			blocked = it.blockedReason
+		if template.dueInDays != 0 {
+			due = time.Now().AddDate(0, 0, template.dueInDays)
 		}
 
-		_, err := tx.Exec(ctx, `
+		var blocked any
+		if blockedReason != "" {
+			blocked = blockedReason
+		}
+
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO onboarding_items
 				(id, plan_id, stage_id, title, description, kind, status, blocked_reason, due_on, position)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -301,15 +397,18 @@ func seedOnboarding(ctx context.Context, tx pgx.Tx) error {
 			        WHEN EXCLUDED.status = 'done' THEN COALESCE(onboarding_items.completed_at, now())
 			        ELSE NULL
 			    END`,
-			it.id, planDasha, it.stageID, it.title, it.description,
-			it.kind, it.status, blocked, due, it.position,
-		)
-		if err != nil {
-			return fmt.Errorf("seed: upsert onboarding item %s: %w", it.id, err)
+			itemID, planID, stageIDs[template.stageIndex], template.title, template.description,
+			template.kind, status, blocked, due, template.position,
+		); err != nil {
+			return fmt.Errorf("seed: upsert onboarding item %s: %w", itemID, err)
 		}
 	}
 
 	return nil
+}
+
+func derivedID(kind, seed string) string {
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(kind+":"+seed)).String()
 }
 
 func seedKnowledgeBase(ctx context.Context, tx pgx.Tx) error {

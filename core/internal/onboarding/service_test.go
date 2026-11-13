@@ -83,7 +83,7 @@ func demoPlan() Plan {
 			},
 		},
 		Progress: Progress{Done: 1, Total: 3, Percent: 33},
-		NextStep: &Item{ID: "item-2", StageID: "stage-1", Title: "Доступ к Jira", Status: "in_progress"},
+		NextStep: &NextStep{ItemID: "item-2", Title: "Доступ к Jira", Reason: "Обязательный пункт этапа «Неделя 1 · Окружение»"},
 	}
 }
 
@@ -109,12 +109,13 @@ func TestNextStepSkipsDoneAndSkipped(t *testing.T) {
 
 	stages := []Stage{
 		{Items: []Item{{ID: "a", Status: "done"}, {ID: "b", Status: "skipped"}}},
-		{Items: []Item{{ID: "c", Status: "pending"}}},
+		{Items: []Item{{ID: "c", Title: "Третий пункт", Status: "pending"}}},
 	}
 
 	next := nextStepOf(stages)
 	require.NotNil(t, next)
-	require.Equal(t, "c", next.ID)
+	require.Equal(t, "c", next.ItemID)
+	require.Equal(t, "Третий пункт", next.Title)
 
 	require.Nil(t, nextStepOf([]Stage{{Items: []Item{{ID: "a", Status: "done"}}}}))
 }
