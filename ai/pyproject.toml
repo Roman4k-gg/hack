@@ -1,7 +1,7 @@
 [project]
 name = "ai-buddy-ai"
 version = "0.1.0"
-description = "AI-buddy: AI-сервис (агентный цикл, RAG) и MCP-сервер"
+description = "AI-buddy: AI-сервис (агентный цикл, инструменты, поиск по базе знаний)"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -11,8 +11,6 @@ dependencies = [
     "pydantic-settings>=2.6",
     "httpx>=0.27",
     "pyjwt>=2.9",
-    "mcp>=1.9",
-    "litellm>=1.50",
     "psycopg[binary]>=3.2",
 ]
 
@@ -33,13 +31,9 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = "--cov=app --cov-report=term-missing"
 
-[tool.coverage.run]
-source = ["app"]
-omit = ["app/cron/*", "app/mcp/__main__.py"]
-
 [tool.ruff]
 line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "ASYNC", "SIM"]
+select = ["E", "F", "I", "B", "UP", "SIM"]
