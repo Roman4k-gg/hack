@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"ai-buddy/core/internal/rbac"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -127,7 +129,7 @@ func (s *Service) Login(ctx context.Context, email string) (Session, error) {
 		return Session{}, err
 	}
 
-	token, expiresAt, err := s.tokens.Issue(user.ID, user.Email, user.Role, user.TeamID)
+	token, expiresAt, err := s.tokens.Issue(user.ID, user.Email, user.Role, user.TeamID, rbac.ScopesForRole(user.Role))
 	if err != nil {
 		return Session{}, err
 	}

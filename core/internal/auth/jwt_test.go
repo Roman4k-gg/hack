@@ -29,7 +29,7 @@ func TestTokenManagerIssueAndParse(t *testing.T) {
 	manager, err := NewTokenManager("secret", time.Hour, "ai-buddy-core")
 	require.NoError(t, err)
 
-	token, expiresAt, err := manager.Issue("user-1", "dasha@demo.local", "intern", "team-1")
+	token, expiresAt, err := manager.Issue("user-1", "dasha@demo.local", "intern", "team-1", []string{"chat:use"})
 	require.NoError(t, err)
 	require.NotEmpty(t, token)
 	require.WithinDuration(t, time.Now().Add(time.Hour), expiresAt, time.Minute)
@@ -40,6 +40,7 @@ func TestTokenManagerIssueAndParse(t *testing.T) {
 	require.Equal(t, "dasha@demo.local", claims.Email)
 	require.Equal(t, "intern", claims.Role)
 	require.Equal(t, "team-1", claims.TeamID)
+	require.Equal(t, []string{"chat:use"}, claims.Scopes)
 	require.Equal(t, "ai-buddy-core", claims.Issuer)
 }
 
@@ -49,7 +50,7 @@ func TestTokenManagerIssueRequiresUserID(t *testing.T) {
 	manager, err := NewTokenManager("secret", time.Hour, "ai-buddy-core")
 	require.NoError(t, err)
 
-	_, _, err = manager.Issue("", "dasha@demo.local", "intern", "team-1")
+	_, _, err = manager.Issue("", "dasha@demo.local", "intern", "team-1", nil)
 	require.Error(t, err)
 }
 
@@ -61,7 +62,7 @@ func TestTokenManagerParseRejectsForeignSecret(t *testing.T) {
 	other, err := NewTokenManager("another-secret", time.Hour, "ai-buddy-core")
 	require.NoError(t, err)
 
-	token, _, err := issuer.Issue("user-1", "dasha@demo.local", "intern", "team-1")
+	token, _, err := issuer.Issue("user-1", "dasha@demo.local", "intern", "team-1", nil)
 	require.NoError(t, err)
 
 	_, err = other.Parse(token)

@@ -1,34 +1,12 @@
 package auth
 
 import (
-	"context"
 	"net/http"
 	"strings"
 
 	"ai-buddy/core/internal/platform/errors"
 	"ai-buddy/core/internal/platform/reqctx"
 )
-
-type Principal struct {
-	UserID string
-	Email  string
-	Role   string
-	TeamID string
-}
-
-type principalKey struct{}
-
-func WithPrincipal(ctx context.Context, principal Principal) context.Context {
-	return context.WithValue(ctx, principalKey{}, principal)
-}
-
-func PrincipalFrom(ctx context.Context) (Principal, bool) {
-	if ctx == nil {
-		return Principal{}, false
-	}
-	principal, ok := ctx.Value(principalKey{}).(Principal)
-	return principal, ok
-}
 
 type userIDSetter interface {
 	SetUserID(id string)
@@ -56,11 +34,12 @@ func RequireAuth(tokens *TokenManager) func(http.Handler) http.Handler {
 			}
 
 			ctx := reqctx.WithUserID(r.Context(), claims.Subject)
-			ctx = WithPrincipal(ctx, Principal{
+			ctx = reqctx.WithPrincipal(ctx, reqctx.Principal{
 				UserID: claims.Subject,
 				Email:  claims.Email,
 				Role:   claims.Role,
 				TeamID: claims.TeamID,
+				Scopes: claims.Scopes,
 			})
 
 			next.ServeHTTP(w, r.WithContext(ctx))
