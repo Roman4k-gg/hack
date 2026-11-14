@@ -1,24 +1,36 @@
 SHELL := /bin/sh
 
-COMPOSE       := docker compose
-COMPOSE_DEV   := docker compose --profile dev
-COMPOSE_DEMO  := docker compose --profile demo
-COMPOSE_OBS   := docker compose --profile dev --profile observability
+COMPOSE      := docker compose
+COMPOSE_OBS  := docker compose --profile dev --profile observability
 
 .DEFAULT_GOAL := up
 
+DEV_PROFILES := dev
 DEV_SERVICES := web
+
 ifneq ($(wildcard ai/Dockerfile),)
-DEV_SERVICES += ai mcp
+DEV_SERVICES += ai
 endif
 
+ifneq ($(wildcard ai/app/mcp.py),)
+DEV_SERVICES += mcp
+DEV_PROFILES += mcp
+endif
+
+DEMO_PROFILES := demo
 DEMO_SERVICES := $(DEV_SERVICES)
+
 ifneq ($(wildcard mocks/Dockerfile),)
 DEMO_SERVICES += mocks
 endif
-ifneq ($(wildcard ai/Dockerfile),)
+
+ifneq ($(wildcard ai/app/cron.py),)
 DEMO_SERVICES += cron
+DEMO_PROFILES += cron
 endif
+
+COMPOSE_DEV  := $(COMPOSE) $(foreach profile,$(DEV_PROFILES),--profile $(profile))
+COMPOSE_DEMO := $(COMPOSE) --profile $(DEMO_PROFILES) $(foreach profile,$(DEV_PROFILES),--profile $(profile))
 
 .PHONY: help up up-dev up-demo up-observability down seed demo-reset logs ps \
         test test-core test-ai test-web coverage e2e lint fmt smoke \

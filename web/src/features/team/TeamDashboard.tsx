@@ -5,17 +5,19 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuthStore } from '@/features/auth/authStore';
 import { cn } from '@/lib/utils';
 import { fetchTeamReport } from './api';
+import { TeamInsights } from './TeamInsights';
 import type { TeamMember } from './types';
 
 const TEAM_SCOPE = 'onboarding:team:read';
 
 export function TeamDashboard() {
   const scopes = useAuthStore((state) => state.user?.scopes ?? []);
+  const userId = useAuthStore((state) => state.user?.id);
   const canView = scopes.includes(TEAM_SCOPE) || scopes.includes('*');
   const [teamFilter, setTeamFilter] = useState('all');
 
   const { data, isPending, isError, refetch } = useQuery({
-    queryKey: ['team-report'],
+    queryKey: ['team-report', userId],
     queryFn: fetchTeamReport,
     enabled: canView,
   });
@@ -33,11 +35,16 @@ export function TeamDashboard() {
       return [];
     }
 
-    if (teamFilter === 'all') {
-      return data.interns;
-    }
+    const list =
+      teamFilter === 'all'
+        ? data.interns
+        : data.interns.filter((member) => member.team.id === teamFilter);
 
-    return data.interns.filter((member) => member.team.id === teamFilter);
+    return [...list].sort(
+      (a, b) =>
+        Number(b.at_risk) - Number(a.at_risk) ||
+        a.progress.percent - b.progress.percent,
+    );
   }, [data, teamFilter]);
 
   if (!canView) {
@@ -56,7 +63,9 @@ export function TeamDashboard() {
   if (isError || !data) {
     return (
       <div>
-        <p>Не удалось загрузить метрики команды. Проверьте подключение к API.</p>
+        <p>
+          Не удалось загрузить метрики команды. Проверьте подключение к API.
+        </p>
         <button
           className="mt-3 bg-ink px-4 py-2 text-sm font-bold text-paper"
           onClick={() => refetch()}
@@ -74,7 +83,7 @@ export function TeamDashboard() {
       <p className="text-xs text-muted">Наставникам и руководителям</p>
       <h1 className="mt-1 text-3xl font-extrabold tracking-tight">Команда</h1>
       <p className="mt-1 text-sm text-muted">
-        Прогресс, успеваемость и риски по каждому стажёру — из PostgreSQL.
+        Кому нужна помощь и как идёт адаптация каждого стажёра.
       </p>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -93,16 +102,18 @@ export function TeamDashboard() {
         <MetricCard
           label="Успеваемость"
           value={`${overview.avg_pace}%`}
-          hint="дедлайны не просрочены"
+          hint="выполнено к сроку"
           tone="bg-iris-soft"
         />
         <MetricCard
           label="В зоне риска"
           value={String(overview.at_risk)}
-          hint={`блокеров: ${overview.blocked}, просрочено: ${overview.overdue}`}
+          hint={`заблокировано: ${overview.blocked}, просрочено: ${overview.overdue}`}
           tone="bg-alert-soft"
         />
       </div>
+
+      <TeamInsights />
 
       {overview.teams.length > 1 && (
         <div className="mt-6 flex flex-wrap gap-2">
@@ -130,16 +141,25 @@ export function TeamDashboard() {
           />
         </div>
       ) : (
-        <div className="mt-6 grid gap-4 lg:grid-cols-2">
-          {members.map((member) => (
-            <MemberCard key={member.id} member={member} />
-          ))}
+        <div className="mt-6">
+          <div className="hidden grid-cols-[minmax(0,1.4fr)_minmax(0,1.4fr)_9.5rem_5rem] gap-6 px-5 pb-2 text-xs font-bold text-muted lg:grid">
+            <span>Стажёр</span>
+            <span>Прогресс</span>
+            <span>Статус</span>
+            <span className="text-right">Вопросов AI</span>
+          </div>
+          <ul className="flex flex-col gap-3">
+            {members.map((member) => (
+              <MemberRow key={member.id} member={member} />
+            ))}
+          </ul>
         </div>
       )}
 
       {teams.length === 0 && data.interns.length === 0 && (
         <p className="mt-4 text-xs text-muted">
-          Команды без плана адаптации тоже видны в списке — у них нулевой прогресс.
+          Команды без плана адаптации тоже видны в списке — у них нулевой
+          прогресс.
         </p>
       )}
     </section>
@@ -158,10 +178,10 @@ function MetricCard({
   tone: string;
 }) {
   return (
-    <div className={cn('p-4', tone)}>
-      <p className="text-xs font-bold">{label}</p>
-      <p className="mt-1 text-4xl font-extrabold tracking-tight">{value}</p>
-      <p className="mt-1 text-xs text-muted">{hint}</p>
+    <div className={cn('p-5', tone)}>
+      <p className="text-sm font-bold">{label}</p>
+      <p className="mt-1 text-5xl font-extrabold tracking-tight">{value}</p>
+      <p className="mt-1 text-sm text-muted">{hint}</p>
     </div>
   );
 }
@@ -189,100 +209,97 @@ function FilterChip({
   );
 }
 
-function MemberCard({ member }: { member: TeamMember }) {
+function MemberRow({ member }: { member: TeamMember }) {
   const hasPlan = Boolean(member.plan);
-  const stage = member.plan?.current_stage ?? 'План не назначен';
+  const stage = member.plan?.current_stage;
+
+  const status = !hasPlan
+    ? { label: 'План не назначен', tone: 'bg-mist text-muted' }
+    : member.at_risk
+      ? { label: 'Нужна помощь', tone: 'bg-alert-soft text-ink' }
+      : { label: 'Идёт по плану', tone: 'bg-brand-soft text-ink' };
 
   return (
-    <article
+    <li
       className={cn(
-        'border border-line bg-paper p-4',
+        'border border-line bg-paper p-5',
         member.at_risk && 'border-l-4 border-l-alert',
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-base font-extrabold">{member.full_name}</h2>
-          <p className="text-xs text-muted">
+      <div className="grid items-center gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1.4fr)_9.5rem_5rem] lg:gap-6">
+        <div className="min-w-0">
+          <p className="truncate text-base font-extrabold">
+            {member.full_name}
+          </p>
+          <p className="truncate text-sm text-muted">
             {member.position || 'Стажёр'} · {member.team.name || 'без команды'}
-            {member.mentor ? ` · наставник ${member.mentor.full_name}` : ''}
           </p>
         </div>
-        {member.at_risk && (
-          <span className="bg-alert-soft px-2 py-0.5 text-[11px] font-bold">
-            риск
+
+        <div>
+          {hasPlan ? (
+            <>
+              <div className="flex items-baseline justify-between text-sm font-bold">
+                <span>
+                  {member.progress.done} из {member.progress.total}
+                </span>
+                <span>{member.progress.percent}%</span>
+              </div>
+              <div className="mt-1 h-2.5 w-full bg-mist">
+                <div
+                  className="h-2.5 bg-brand"
+                  style={{
+                    width: `${Math.min(member.progress.percent, 100)}%`,
+                  }}
+                />
+              </div>
+              {stage && <p className="mt-1 text-xs text-muted">{stage}</p>}
+            </>
+          ) : (
+            <p className="text-sm text-muted">Прогресс не считается</p>
+          )}
+        </div>
+
+        <span
+          className={cn(
+            'w-fit px-2.5 py-1 text-xs font-bold lg:w-full lg:text-center',
+            status.tone,
+          )}
+        >
+          {status.label}
+        </span>
+
+        <p className="text-sm font-bold lg:text-right">
+          <span className="font-normal text-muted lg:hidden">
+            Вопросов AI:{' '}
           </span>
-        )}
-      </div>
-
-      <div className="mt-4">
-        <div className="flex items-baseline justify-between text-xs font-bold">
-          <span>Прогресс</span>
-          <span>
-            {member.progress.done} из {member.progress.total} ·{' '}
-            {member.progress.percent}%
-          </span>
-        </div>
-        <div className="mt-1 h-2 w-full bg-mist">
-          <div
-            className="h-2 bg-brand"
-            style={{ width: `${Math.min(member.progress.percent, 100)}%` }}
-          />
-        </div>
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-        <Row label="Успеваемость" value={`${member.pace.percent}%`} />
-        <Row label="Этап" value={stage} />
-        <Row
-          label="Статусы"
-          value={`в работе ${member.progress.in_progress}, ждут ${member.progress.pending}`}
-        />
-        <Row label="Вопросов AI" value={String(member.activity.questions)} />
-      </div>
-
-      {member.blockers.length > 0 && (
-        <div className="mt-4 border-l-4 border-alert bg-alert-soft/40 p-3">
-          <p className="text-xs font-bold">Блокеры</p>
-          <ul className="mt-1 flex flex-col gap-1 text-xs">
-            {member.blockers.map((blocker) => (
-              <li key={blocker.item_id}>
-                <span className="font-bold">{blocker.title}</span>
-                {blocker.reason ? ` — ${blocker.reason}` : ''}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {member.overdue.length > 0 && (
-        <div className="mt-2 border-l-4 border-l-iris bg-iris-soft/40 p-3">
-          <p className="text-xs font-bold">Просрочено</p>
-          <ul className="mt-1 flex flex-col gap-1 text-xs">
-            {member.overdue.map((item) => (
-              <li key={item.item_id}>
-                {item.title} — на {item.days_overdue} дн. позже срока
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {!hasPlan && (
-        <p className="mt-3 text-xs text-muted">
-          План адаптации ещё не назначен — прогресс не считается.
+          {member.activity.questions}
         </p>
-      )}
-    </article>
-  );
-}
+      </div>
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-2">
-      <span className="text-muted">{label}</span>
-      <span className="text-right font-bold">{value}</span>
-    </div>
+      {(member.blockers.length > 0 || member.overdue.length > 0) && (
+        <ul className="mt-4 flex flex-col gap-1 border-t border-line pt-3 text-sm">
+          {member.blockers.map((blocker) => (
+            <li key={blocker.item_id}>
+              <span className="mr-2 bg-alert-soft px-1.5 py-0.5 text-xs font-bold">
+                Заблокировано
+              </span>
+              <span className="font-bold">{blocker.title}</span>
+              {blocker.reason ? ` — ${blocker.reason}` : ''}
+            </li>
+          ))}
+          {member.overdue.map((item) => (
+            <li key={item.item_id}>
+              <span className="mr-2 bg-iris-soft px-1.5 py-0.5 text-xs font-bold">
+                Просрочено
+              </span>
+              <span className="font-bold">{item.title}</span> — на{' '}
+              {item.days_overdue} дн. позже срока
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
   );
 }
 
@@ -296,9 +313,9 @@ function DashboardSkeleton() {
           <Skeleton key={index} className="h-24" />
         ))}
       </div>
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        {[0, 1].map((index) => (
-          <Skeleton key={index} className="h-56" />
+      <div className="mt-6 flex flex-col gap-3">
+        {[0, 1, 2].map((index) => (
+          <Skeleton key={index} className="h-24" />
         ))}
       </div>
     </div>

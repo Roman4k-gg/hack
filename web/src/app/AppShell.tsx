@@ -1,5 +1,12 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, useNavigate } from '@tanstack/react-router';
-import { LogOut, MapIcon, MessageCircle, Users } from 'lucide-react';
+import {
+  ClipboardList,
+  LogOut,
+  MapIcon,
+  MessageCircle,
+  Users,
+} from 'lucide-react';
 import { useAuthStore } from '@/features/auth/authStore';
 import { roleLabels } from '@/features/auth/types';
 
@@ -7,22 +14,33 @@ const TEAM_SCOPE = 'onboarding:team:read';
 
 export function AppShell() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
 
   const scopes = user?.scopes ?? [];
   const canSeeTeam = scopes.includes(TEAM_SCOPE) || scopes.includes('*');
 
+  const isIntern = user?.role === 'intern';
+
   const navItems = [
-    { to: '/map', label: 'Карта', icon: MapIcon, color: 'bg-brand' },
-    { to: '/', label: 'Чат', icon: MessageCircle, color: 'bg-azure' },
+    ...(isIntern
+      ? [{ to: '/map', label: 'Карта', icon: MapIcon, color: 'bg-brand-soft' }]
+      : []),
+    { to: '/', label: 'Чат', icon: MessageCircle, color: 'bg-azure-soft' },
+    {
+      to: '/requests',
+      label: 'Заявки',
+      icon: ClipboardList,
+      color: 'bg-alert-soft',
+    },
     ...(canSeeTeam
       ? [
           {
             to: '/dashboard',
             label: 'Команда',
             icon: Users,
-            color: 'bg-iris',
+            color: 'bg-iris-soft',
           },
         ]
       : []),
@@ -30,12 +48,13 @@ export function AppShell() {
 
   function onLogout() {
     logout();
+    queryClient.clear();
     void navigate({ to: '/login' });
   }
 
   return (
     <div className="flex min-h-screen bg-paper">
-      <aside className="flex w-16 flex-col items-center gap-3 border-r border-line py-4">
+      <aside className="sticky top-0 flex h-screen w-16 shrink-0 flex-col items-center gap-3 self-start border-r border-line py-4">
         <div className="flex h-10 w-10 items-center justify-center bg-ink text-sm font-extrabold text-brand">
           AI
         </div>

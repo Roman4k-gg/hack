@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -103,14 +104,17 @@ type internPlan struct {
 }
 
 type document struct {
-	id      string
-	slug    string
-	title   string
-	summary string
-	content string
-	url     string
-	teamID  string
-	tags    []string
+	id            string
+	slug          string
+	title         string
+	summary       string
+	content       string
+	url           string
+	teamID        string
+	tags          []string
+	owner         string
+	visibility    string
+	updatedInDays int
 }
 
 func Run(ctx context.Context, pool *pgxpool.Pool, opts Options) error {
@@ -419,7 +423,8 @@ func seedKnowledgeBase(ctx context.Context, tx pgx.Tx) error {
 			summary: "Пошаговая инструкция для стажёров команды Search.",
 			content: "1. Напишите наставнику в чат.\n2. Наставник создаёт заявку в IT-портале.\n3. Доступ приходит на рабочую почту в течение дня.\n4. Войдите в Jira через SSO.",
 			url:     "https://demo.local/docs/jira-access", teamID: teamSearch,
-			tags: []string{"jira", "доступ", "access", "search"},
+			tags:  []string{"jira", "доступ", "access", "search"},
+			owner: "petr@demo.local", visibility: "team",
 		},
 		{
 			id: "55555555-5555-5555-5555-555555555502", slug: "vpn-setup",
@@ -427,7 +432,8 @@ func seedKnowledgeBase(ctx context.Context, tx pgx.Tx) error {
 			summary: "Как подключиться к корпоративной сети с ноутбука.",
 			content: "Установите клиент из IT-портала, импортируйте профиль и войдите под рабочей учётной записью. При проблемах пишите в #it-help.",
 			url:     "https://demo.local/docs/vpn-setup", teamID: teamPlatform,
-			tags: []string{"vpn", "сеть", "it"},
+			tags:  []string{"vpn", "сеть", "it"},
+			owner: "admin@demo.local", visibility: "team",
 		},
 		{
 			id: "55555555-5555-5555-5555-555555555503", slug: "code-review-guide",
@@ -435,7 +441,8 @@ func seedKnowledgeBase(ctx context.Context, tx pgx.Tx) error {
 			summary: "Правила ревью и ожидания от автора PR.",
 			content: "Держите PR небольшим (до 400 строк), описывайте изменения и добавляйте тесты. Ревьюер отвечает в течение рабочего дня.",
 			url:     "https://demo.local/docs/code-review", teamID: teamSearch,
-			tags: []string{"ревью", "pr", "процессы"},
+			tags:  []string{"ревью", "pr", "процессы"},
+			owner: "petr@demo.local", visibility: "team",
 		},
 		{
 			id: "55555555-5555-5555-5555-555555555504", slug: "release-process",
@@ -443,7 +450,8 @@ func seedKnowledgeBase(ctx context.Context, tx pgx.Tx) error {
 			summary: "Ветки, стенды и деплой в прод.",
 			content: "Разработка идёт в main, релиз — по расписанию два раза в неделю. Перед деплоем прогоняются тесты и проверка на стенде stage.",
 			url:     "https://demo.local/docs/release-process", teamID: teamPlatform,
-			tags: []string{"релиз", "деплой", "процессы"},
+			tags:  []string{"релиз", "деплой", "процессы"},
+			owner: "admin@demo.local", visibility: "team",
 		},
 		{
 			id: "55555555-5555-5555-5555-555555555505", slug: "vacation-policy",
@@ -451,7 +459,71 @@ func seedKnowledgeBase(ctx context.Context, tx pgx.Tx) error {
 			summary: "Сколько дней доступно и как их согласовать.",
 			content: "Стажёру доступны оплачиваемые дни отпуска согласно договору. Заявка создаётся в HR-системе и согласуется с наставником за две недели.",
 			url:     "https://demo.local/docs/vacation", teamID: "",
-			tags: []string{"отпуск", "hr", "отгул"},
+			tags:  []string{"отпуск", "hr", "отгул"},
+			owner: "marina@demo.local", visibility: "public",
+		},
+		{
+			id: "55555555-5555-5555-5555-555555555506", slug: "onboarding-checklist",
+			title:   "Чек-лист новичка",
+			summary: "Какие шаги ждут стажёра в первые недели.",
+			content: "Первый день: ноутбук, VPN и знакомство с командой. Первая неделя: доступы, 1:1 с наставником, первая задача. Второй неделя: ревью, релиз, деплой.",
+			url:     "https://demo.local/docs/onboarding", teamID: teamSearch,
+			tags:  []string{"онбординг", "чек-лист", "адаптация"},
+			owner: "marina@demo.local", visibility: "team",
+		},
+		{
+			id: "55555555-5555-5555-5555-555555555507", slug: "first-pr",
+			title:   "Как открыть первый PR",
+			summary: "Минимальный путь от форка до мержа.",
+			content: "Сделайте форк, создайте ветку от main, внесите небольшое изменение с тестом и откройте PR. Ревьюер оставит комментарии, после правок PR смержится.",
+			url:     "https://demo.local/docs/first-pr", teamID: teamSearch,
+			tags:  []string{"pr", "git", "первый код"},
+			owner: "petr@demo.local", visibility: "team",
+		},
+		{
+			id: "55555555-5555-5555-5555-555555555508", slug: "standup-rules",
+			title:   "Как проходят дейлики",
+			summary: "Формат, время и правило отсутствия.",
+			content: "Дейлик каждый день в 10:00 по московскому времени, формат — три вопроса: что сделал, что делаешь, что мешает. Отсутствовать без предупреждения нельзя.",
+			url:     "https://demo.local/docs/standup", teamID: "",
+			tags:  []string{"дейлик", "процессы", "команда"},
+			owner: "marina@demo.local", visibility: "public",
+		},
+		{
+			id: "55555555-5555-5555-5555-555555555509", slug: "secrets-policy",
+			title:   "Правила работы с секретами",
+			summary: "Где хранить пароли и токены.",
+			content: "Пароли и токены храним только в менеджере секретов. Запрещено класть их в репозиторий, конфиги и переписку. Обнаружили утечку — сразу сообщите в #security.",
+			url:     "https://demo.local/docs/secrets", teamID: "",
+			tags:  []string{"секреты", "security", "доступ"},
+			owner: "admin@demo.local", visibility: "hr", updatedInDays: -200,
+		},
+		{
+			id: "55555555-5555-5555-5555-555555555510", slug: "benefits-2026",
+			title:   "Льготы и бенефиты",
+			summary: "Что доступно сотрудникам и как оформить.",
+			content: "Сотрудникам доступны ДМС со стоматологией, обучение и компенсация спортзала. Оформление — через HR-портал, срок рассмотрения — пять рабочих дней.",
+			url:     "https://demo.local/docs/benefits", teamID: "",
+			tags:  []string{"бенефиты", "hr", "дмс"},
+			owner: "marina@demo.local", visibility: "hr",
+		},
+		{
+			id: "55555555-5555-5555-5555-555555555511", slug: "deploy-runbook",
+			title:   "Runbook деплоя",
+			summary: "Порядок выката и откат.",
+			content: "Выкат идёт по расписанию: стенд, smoke-тесты, затем прод с двойным подтверждением. Откат — одной командой, после чего инцидент разбирается в течение дня.",
+			url:     "https://demo.local/docs/deploy-runbook", teamID: teamAds,
+			tags:  []string{"деплой", "runbook", "stage"},
+			owner: "igor@demo.local", visibility: "team",
+		},
+		{
+			id: "55555555-5555-5555-5555-555555555512", slug: "access-bundle",
+			title:   "Пакет доступов стажёра",
+			summary: "Какие доступы получает стажёр на старте.",
+			content: "Базовый пакет стажёра: VPN, Jira, репозиторий команды и база знаний. Дополнительно: доступ к стендам — после первого merged PR.",
+			url:     "https://demo.local/docs/access-bundle", teamID: teamSearch,
+			tags:  []string{"доступ", "jira", "vpn", "пакет"},
+			owner: "petr@demo.local", visibility: "team",
 		},
 	}
 
@@ -461,9 +533,19 @@ func seedKnowledgeBase(ctx context.Context, tx pgx.Tx) error {
 			teamID = d.teamID
 		}
 
+		visibility := d.visibility
+		if visibility == "" {
+			visibility = "team"
+		}
+
+		updatedAt := time.Now()
+		if d.updatedInDays != 0 {
+			updatedAt = time.Now().AddDate(0, 0, d.updatedInDays)
+		}
+
 		_, err := tx.Exec(ctx, `
-			INSERT INTO kb_documents (id, slug, title, summary, content, url, team_id, tags)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			INSERT INTO kb_documents (id, slug, title, summary, content, url, team_id, tags, owner_email, visibility, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 			ON CONFLICT (id) DO UPDATE
 			SET slug = EXCLUDED.slug,
 			    title = EXCLUDED.title,
@@ -471,11 +553,43 @@ func seedKnowledgeBase(ctx context.Context, tx pgx.Tx) error {
 			    content = EXCLUDED.content,
 			    url = EXCLUDED.url,
 			    team_id = EXCLUDED.team_id,
-			    tags = EXCLUDED.tags`,
+			    tags = EXCLUDED.tags,
+			    owner_email = EXCLUDED.owner_email,
+			    visibility = EXCLUDED.visibility,
+			    updated_at = EXCLUDED.updated_at`,
 			d.id, d.slug, d.title, d.summary, d.content, d.url, teamID, d.tags,
+			d.owner, visibility, updatedAt,
 		)
 		if err != nil {
 			return fmt.Errorf("seed: upsert kb document %s: %w", d.slug, err)
+		}
+
+		if err := seedDocumentChunks(ctx, tx, d.id, d.content); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func seedDocumentChunks(ctx context.Context, tx pgx.Tx, documentID, content string) error {
+	parts := strings.Split(content, "\n")
+
+	for index, part := range parts {
+		chunk := strings.TrimSpace(part)
+		if chunk == "" {
+			continue
+		}
+
+		_, err := tx.Exec(ctx, `
+			INSERT INTO doc_chunks (document_id, chunk_index, content)
+			VALUES ($1, $2, $3)
+			ON CONFLICT (document_id, chunk_index) DO UPDATE
+			SET content = EXCLUDED.content`,
+			documentID, index, chunk,
+		)
+		if err != nil {
+			return fmt.Errorf("seed: upsert doc chunk %s/%d: %w", documentID, index, err)
 		}
 	}
 

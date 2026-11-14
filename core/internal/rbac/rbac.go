@@ -8,10 +8,12 @@ import (
 const (
 	ScopeAll = "*"
 
-	ScopePlanRead  = "onboarding:plan:read"
-	ScopePlanWrite = "onboarding:plan:write"
-	ScopeChat      = "chat:use"
-	ScopeKBRead    = "kb:read"
+	ScopePlanRead   = "onboarding:plan:read"
+	ScopePlanWrite  = "onboarding:plan:write"
+	ScopeChat       = "chat:use"
+	ScopeKBRead     = "kb:read"
+	ScopeKBReadTeam = "kb:read:team"
+	ScopeKBReadHR   = "kb:read:hr"
 
 	ScopeRequestsRead  = "requests:read"
 	ScopeRequestsWrite = "requests:write"
@@ -29,14 +31,14 @@ const (
 )
 
 var roleScopes = map[string][]string{
-	RoleIntern: {ScopePlanRead, ScopePlanWrite, ScopeChat, ScopeKBRead},
-	RoleMentor: {ScopePlanRead, ScopePlanWrite, ScopeChat, ScopeKBRead, ScopeTeamRead, ScopeAnalyticsTeam},
+	RoleIntern: {ScopePlanRead, ScopePlanWrite, ScopeChat, ScopeKBRead, ScopeKBReadTeam},
+	RoleMentor: {ScopePlanRead, ScopePlanWrite, ScopeChat, ScopeKBRead, ScopeKBReadTeam, ScopeTeamRead, ScopeAnalyticsTeam},
 	RoleManager: {
-		ScopePlanRead, ScopePlanWrite, ScopeChat, ScopeKBRead,
+		ScopePlanRead, ScopePlanWrite, ScopeChat, ScopeKBRead, ScopeKBReadTeam,
 		ScopeTeamRead, ScopeAnalyticsTeam, ScopeRequestsRead, ScopeRequestsWrite,
 	},
 	RoleHR: {
-		ScopePlanRead, ScopeKBRead, ScopeTeamRead, ScopeAnalyticsTeam,
+		ScopePlanRead, ScopeKBRead, ScopeKBReadHR, ScopeTeamRead, ScopeAnalyticsTeam,
 		ScopeRequestsRead, ScopeRequestsWrite,
 	},
 	RoleAdmin: {ScopeAll},
