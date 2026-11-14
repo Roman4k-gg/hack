@@ -60,7 +60,7 @@ test('стажёр получает план с инструментом и ис
     await page.goto('/');
 
     await expect(
-        page.getByRole('heading', { name: 'Привет! Я AI-buddy' }),
+        page.getByRole('heading', { name: 'С чего начнём?' }),
     ).toBeVisible();
 
     const input = page.getByRole('textbox', {
@@ -90,7 +90,7 @@ test('стажёр получает план с инструментом и ис
 
     await expect(
         page.locator('.tool-call-card__name'),
-    ).toHaveText('get_onboarding_plan');
+    ).toHaveText('Получение плана адаптации');
 
     await expect(
         page.locator('.tool-call-card__status'),
