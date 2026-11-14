@@ -1,12 +1,14 @@
 package team
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"ai-buddy/core/internal/onboarding"
 	"ai-buddy/core/internal/platform/errors"
 	"ai-buddy/core/internal/platform/reqctx"
 	"ai-buddy/core/internal/rbac"
@@ -21,7 +23,7 @@ func newTestHandler(t *testing.T) (*Handler, *fakeStore) {
 	service := NewService(store)
 	service.now = func() time.Time { return day(0) }
 
-	return NewHandler(service, nil), store
+	return NewHandler(service, nil, nil), store
 }
 
 func withPrincipal(req *http.Request, role string, scopes ...string) *http.Request {
@@ -112,4 +114,81 @@ func TestHandleOverviewWithoutAnalyticsScopeIsForbidden(t *testing.T) {
 	handler.Router().ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+type fakePlans struct {
+	plan onboarding.Plan
+	err  error
+}
+
+func (f *fakePlans) PlanForIntern(_ context.Context, _ reqctx.Principal, internID string) (onboarding.Plan, error) {
+	if f.err != nil {
+		return onboarding.Plan{}, f.err
+	}
+
+	if f.plan.ID == "" {
+		return onboarding.Plan{}, onboarding.ErrPlanNotFound
+	}
+
+	return f.plan, nil
+}
+
+func TestHandleInternPlanReturnsPlan(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newTestHandler(t)
+	handler.plans = &fakePlans{plan: onboarding.Plan{ID: "plan-1", Title: "Адаптация в команде Search"}}
+
+	req := withPrincipal(httptest.NewRequest(http.MethodGet, "/interns/intern-1/plan", nil), rbac.RoleMentor, rbac.ScopeTeamRead)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var plan onboarding.Plan
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &plan))
+	require.Equal(t, "Адаптация в команде Search", plan.Title)
+}
+
+func TestHandleInternPlanWithoutScopeIsForbidden(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newTestHandler(t)
+	handler.plans = &fakePlans{plan: onboarding.Plan{ID: "plan-1"}}
+
+	req := withPrincipal(httptest.NewRequest(http.MethodGet, "/interns/intern-1/plan", nil), rbac.RoleIntern)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+func TestHandleInternPlanOfForeignInternIsForbidden(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newTestHandler(t)
+	handler.plans = &fakePlans{err: onboarding.ErrForbidden}
+
+	req := withPrincipal(httptest.NewRequest(http.MethodGet, "/interns/intern-1/plan", nil), rbac.RoleMentor, rbac.ScopeTeamRead)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+func TestHandleInternPlanNotFound(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newTestHandler(t)
+	handler.plans = &fakePlans{err: onboarding.ErrPlanNotFound}
+
+	req := withPrincipal(httptest.NewRequest(http.MethodGet, "/interns/missing/plan", nil), rbac.RoleMentor, rbac.ScopeTeamRead)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
 }
