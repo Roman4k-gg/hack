@@ -28,6 +28,14 @@ func (s *fakePlanStore) PlanByUserID(_ context.Context, userID string) (Plan, er
 	return s.plan, nil
 }
 
+func (s *fakePlanStore) InternAccess(_ context.Context, userID string) (InternAccess, error) {
+	if userID == "" {
+		return InternAccess{}, ErrPlanNotFound
+	}
+
+	return InternAccess{UserID: userID, TeamID: "team-1", MentorID: "mentor-1"}, nil
+}
+
 func (s *fakePlanStore) ItemByID(_ context.Context, itemID string) (Item, error) {
 	item, ok := s.items[itemID]
 	if !ok {

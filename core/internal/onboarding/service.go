@@ -89,6 +89,13 @@ type PlanStore interface {
 	PlanByUserID(ctx context.Context, userID string) (Plan, error)
 	ItemByID(ctx context.Context, itemID string) (Item, error)
 	UpdateItemStatus(ctx context.Context, itemID, status, blockedReason string) (Item, error)
+	InternAccess(ctx context.Context, userID string) (InternAccess, error)
+}
+
+type InternAccess struct {
+	UserID   string
+	TeamID   string
+	MentorID string
 }
 
 type PostgresPlanStore struct {
@@ -213,6 +220,30 @@ func (s *PostgresPlanStore) items(ctx context.Context, planID string) ([]Item, e
 		return nil, fmt.Errorf("onboarding: iterate items: %w", err)
 	}
 	return items, nil
+}
+
+func (s *PostgresPlanStore) InternAccess(ctx context.Context, userID string) (InternAccess, error) {
+	if s == nil || s.pool == nil {
+		return InternAccess{}, fmt.Errorf("onboarding: postgres pool is not initialised")
+	}
+
+	var access InternAccess
+
+	err := s.pool.QueryRow(ctx, `
+		SELECT id::text, COALESCE(team_id::text, ''), COALESCE(mentor_id::text, '')
+		  FROM users
+		 WHERE id::text = $1`,
+		userID,
+	).Scan(&access.UserID, &access.TeamID, &access.MentorID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return InternAccess{}, ErrPlanNotFound
+		}
+
+		return InternAccess{}, fmt.Errorf("onboarding: load intern access: %w", err)
+	}
+
+	return access, nil
 }
 
 func (s *PostgresPlanStore) ItemByID(ctx context.Context, itemID string) (Item, error) {
@@ -441,6 +472,44 @@ func canEdit(principal reqctx.Principal, ownerID string) bool {
 	default:
 		return false
 	}
+}
+
+func (s *Service) PlanForIntern(ctx context.Context, principal reqctx.Principal, internID string) (Plan, error) {
+	if s == nil || s.store == nil {
+		return Plan{}, fmt.Errorf("onboarding: service is not initialised")
+	}
+
+	internID = strings.TrimSpace(internID)
+	if internID == "" {
+		return Plan{}, ErrPlanNotFound
+	}
+
+	access, err := s.store.InternAccess(ctx, internID)
+	if err != nil {
+		return Plan{}, err
+	}
+
+	if !canViewIntern(principal, access) {
+		return Plan{}, ErrForbidden
+	}
+
+	return s.store.PlanByUserID(ctx, internID)
+}
+
+func canViewIntern(principal reqctx.Principal, access InternAccess) bool {
+	if !rbac.HasScope(principal.Scopes, rbac.ScopeTeamRead) {
+		return false
+	}
+
+	if rbac.HasScope(principal.Scopes, rbac.ScopeAll) || principal.Role == rbac.RoleHR {
+		return true
+	}
+
+	if access.MentorID != "" && access.MentorID == principal.UserID {
+		return true
+	}
+
+	return access.TeamID != "" && access.TeamID == principal.TeamID
 }
 
 func (s *Service) logWarn(message string, err error) {
