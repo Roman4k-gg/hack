@@ -335,6 +335,31 @@ else
     fail "стажёр запросил флаги → $code (ожидался 403)"
 fi
 
+section 'План стажёра для наставника'
+
+MENTOR_TOKEN=$(json_get "d['token']" <<<"$(curl -sS --max-time 10 -X POST "$CORE_URL/api/v1/auth/login" -H 'Content-Type: application/json' -d '{"email":"petr@demo.local"}')")
+INTERN_ID=$(json_get "d['id']" <<<"$(curl -sS --max-time 10 "$CORE_URL/api/v1/me" "${AUTH[@]}")")
+
+if [ -n "${MENTOR_TOKEN:-}" ] && [ -n "${INTERN_ID:-}" ]; then
+    INTERN_PLAN=$(curl -sS --max-time 10 "$CORE_URL/api/v1/team/interns/$INTERN_ID/plan" -H "Authorization: Bearer $MENTOR_TOKEN")
+
+    STAGES=$(json_get "len(d['stages'])" <<<"$INTERN_PLAN")
+    PROGRESS=$(json_get "d['progress']['percent']" <<<"$INTERN_PLAN")
+
+    if [ "${STAGES:-0}" -ge 1 ] && [ -n "${PROGRESS:-}" ]; then
+        ok "GET /api/v1/team/interns/{id}/plan: наставник видит план стажёра (этапов $STAGES, прогресс $PROGRESS%)"
+    else
+        fail "наставник не увидел план стажёра: $INTERN_PLAN"
+    fi
+
+    code=$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "$CORE_URL/api/v1/team/interns/$INTERN_ID/plan" "${AUTH[@]}")
+    if [ "$code" = "403" ]; then
+        ok "стажёр не видит чужой план → 403"
+    else
+        fail "стажёр запросил чужой план → $code (ожидался 403)"
+    fi
+fi
+
 section 'Чат (SSE)'
 
 STREAM=$(curl -sS --max-time 15 -N -X POST "$CORE_URL/api/v1/chat/stream" \

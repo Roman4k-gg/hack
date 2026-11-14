@@ -81,7 +81,7 @@ func main() {
 	onboardingHandler := onboarding.NewHandler(onboardingService, logger)
 
 	teamService := team.NewService(team.NewPostgresStore(store.Pool()))
-	teamHandler := team.NewHandler(teamService, logger)
+	teamHandler := team.NewHandler(teamService, onboardingService, logger)
 
 	kbService := kb.NewService(kb.NewPostgresStore(store.Pool()))
 	kbHandler := kb.NewHandler(kbService, logger)

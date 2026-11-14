@@ -44,6 +44,10 @@ func (s *stubPlanStore) PlanByUserID(_ context.Context, _ string) (onboarding.Pl
 	return s.plan, nil
 }
 
+func (s *stubPlanStore) InternAccess(_ context.Context, userID string) (onboarding.InternAccess, error) {
+	return onboarding.InternAccess{UserID: userID, TeamID: "team-1", MentorID: "mentor-1"}, nil
+}
+
 func (s *stubPlanStore) ItemByID(_ context.Context, _ string) (onboarding.Item, error) {
 	return onboarding.Item{}, onboarding.ErrItemNotFound
 }

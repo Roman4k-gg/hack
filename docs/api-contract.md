@@ -680,6 +680,38 @@ GET /api/v1/kb/search?q=доступ к Jira&limit=10
 }
 ```
 
+### 3.21 `GET /api/v1/team/interns/{id}/plan`
+
+План адаптации конкретного стажёра — для наставника, руководителя и HR.
+Ответ **такой же**, как в §3.3, только план чужого стажёра.
+**Реализовано 15 ноября.**
+
+**Скоуп:** `onboarding:team:read`
+
+**Кому видно:**
+
+| Роль | Кого видно |
+|---|---|
+| `mentor` | стажёров своей команды и своих подопечных |
+| `manager` | стажёров своей команды |
+| `hr` | всех стажёров |
+| `admin` | всех стажёров |
+| `intern` | никого (403) |
+
+**Ответ `200`** — формат §3.3 (`intern`, `stages`, `progress`, `next_step`).
+
+**Ошибки:** `403 FORBIDDEN` (нет скоупа или стажёр не в вашей команде),
+`404 NOT_FOUND` (стажёра нет).
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8081/api/v1/auth/login \
+  -H 'Content-Type: application/json' -d '{"email":"petr@demo.local"}' \
+  | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])')
+
+curl -s http://localhost:8081/api/v1/team/interns/<intern-id>/plan \
+  -H "Authorization: Bearer $TOKEN"
+```
+
 ## 4. Ошибки
 
 Единый конверт (`core/internal/platform/errors/errors.go`):
