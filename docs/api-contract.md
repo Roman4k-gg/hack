@@ -136,12 +136,7 @@ Mock-логин по email. Пароля нет: любой email из табл�
           "due_on": "2026-11-11T00:00:00Z",
           "position": 1,
           "completed_at": "2026-11-13T07:53:07.712389Z"
-        }ailed to solve: DeadlineExceeded: golang:1.23-alpine: failed to resolve source metadata for docker.io/library/golang:1.23-alpine: failed to do request: Head "https://registry-1.docker.io/v2/library/golang/manifests/1.23-alpine": context deadline exceeded
-
-
-What's next:
-    Debug this Compose error with Gordon → docker ai "help me fix this compose error"
-make: *** [Makefile:43: up] Ошибка 1
+        }
       ]
     }
   ],
@@ -409,6 +404,137 @@ GET /api/v1/kb/search?q=доступ к Jira&limit=10
 
 **Ошибки:** `403 FORBIDDEN` (документ есть, но недоступен роли), `404 NOT_FOUND` (документа нет).
 
+### 3.10 `POST /api/v1/requests/absence/preview`
+
+Готовит черновик заявки на отгул. **Ничего не создаёт.** **Реализовано 14 ноября.**
+Формат совпадает с §10.3.
+
+**Скоуп:** `absence:self`
+
+**Запрос**
+
+```json
+{
+  "date_from": "2026-11-20",
+  "date_to": "2026-11-20",
+  "absence_type": "day_off",
+  "comment": "семейные обстоятельства"
+}
+```
+
+| Поле | Обязательное | Значения |
+|---|---|---|
+| `date_from` | да | `YYYY-MM-DD` |
+| `date_to` | да | `YYYY-MM-DD`, не раньше `date_from` |
+| `absence_type` | да | `vacation \| day_off \| sick_leave` |
+| `comment` | нет | до 500 символов |
+
+**Ответ `200`**
+
+```json
+{
+  "preview_id": "88552932-82cc-4ee3-acf0-87f03af07c0c",
+  "confirmation_token": "94182366-14fd-4aeb-827c-bd920c704265",
+  "expires_at": "2026-11-14T09:50:34Z",
+  "draft": {
+    "date_from": "2026-11-20",
+    "date_to": "2026-11-20",
+    "absence_type": "day_off",
+    "comment": "семейные обстоятельства"
+  },
+  "policy_notes": [
+    "Отгул согласует руководитель команды",
+    "В день отгула отчётность не требуется"
+  ]
+}
+```
+
+`confirmation_token` — одноразовый, живёт в Redis, TTL 10 минут.
+
+**Ошибки:** `400 VALIDATION_ERROR` (даты, тип, длинный комментарий), `403 FORBIDDEN` (нет скоупа).
+
+### 3.11 `POST /api/v1/requests/absence`
+
+Создаёт заявку по подтверждённому preview. **Реализовано 14 ноября.** Формат совпадает с §10.4.
+
+**Скоуп:** `absence:self:write`
+
+**Запрос**
+
+```json
+{
+  "preview_id": "88552932-82cc-4ee3-acf0-87f03af07c0c",
+  "confirmation_token": "94182366-14fd-4aeb-827c-bd920c704265",
+  "idempotency_key": "b7a1c0d2-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+}
+```
+
+**Ответ `200`**
+
+```json
+{
+  "request_id": "b9c6ab89-0327-4600-85dd-0f4bb82aafe0",
+  "kind": "absence",
+  "title": "Отгул 20.11.2026",
+  "status": "pending",
+  "external_id": "ABS-1025",
+  "payload": {
+    "date_from": "2026-11-20",
+    "date_to": "2026-11-20",
+    "absence_type": "day_off",
+    "comment": "семейные обстоятельства"
+  },
+  "approver": { "id": "22222222-2222-2222-2222-222222222226", "full_name": "Ольга Кузнецова" },
+  "next_step": "Заявка уйдёт руководителю; статус можно проверить в разделе «Заявки»",
+  "created_at": "2026-11-14T09:40:34Z",
+  "updated_at": "2026-11-14T09:40:34Z",
+  "history": [
+    { "from": "", "to": "pending", "comment": "Создана стажёром", "created_at": "2026-11-14T09:40:34Z" }
+  ]
+}
+```
+
+Правила:
+
+- `confirmation_token` одноразовый: повторное использование → `400 VALIDATION_ERROR`;
+- тот же `idempotency_key` → **тот же `request_id`**, вторая заявка не создаётся;
+- без токена → `401 UNAUTHORIZED`; без `idempotency_key` → `400 VALIDATION_ERROR`;
+- чужой токен → `403 FORBIDDEN`;
+- сбой корпоративного сервиса → `502 UPSTREAM_ERROR`.
+
+### 3.12 `GET /api/v1/requests`
+
+Список заявок текущего пользователя. **Реализовано 14 ноября.** Формат совпадает с §10.5.
+
+**Скоуп:** `request:self`
+
+**Ответ `200`**
+
+```json
+{
+  "items": [
+    {
+      "request_id": "b9c6ab89-0327-4600-85dd-0f4bb82aafe0",
+      "kind": "absence",
+      "title": "Отгул 20.11.2026",
+      "status": "pending",
+      "external_id": "ABS-1025",
+      "approver": { "id": "22222222-...", "full_name": "Ольга Кузнецова" },
+      "created_at": "2026-11-14T09:40:34Z",
+      "updated_at": "2026-11-14T09:40:34Z"
+    }
+  ]
+}
+```
+
+### 3.13 `GET /api/v1/requests/{id}`
+
+Детали заявки с историей статусов. **Реализовано 14 ноября.** Формат совпадает с §10.5.
+
+**Скоуп:** `request:self` (своя) или `absence:approve:team` (заявка команды)
+
+**Ошибки:** `403 FORBIDDEN` (чужая заявка без права согласования), `404 NOT_FOUND`.
+
 ## 4. Ошибки
 
 Единый конверт (`core/internal/platform/errors/errors.go`):
@@ -664,6 +790,10 @@ GET /api/v1/kb/search?q=доступ+к+jira&limit=10
 
 ### 10.3 `POST /api/v1/requests/absence/preview`
 
+> **Реализовано 14 ноября**, формат зафиксирован в §3.10.
+
+
+
 Готовит черновик заявки на отгул. **Ничего не создаёт.** **Скоуп:** `absence:self`.
 
 **Запрос**
@@ -709,6 +839,10 @@ GET /api/v1/kb/search?q=доступ+к+jira&limit=10
 
 ### 10.4 `POST /api/v1/requests/absence`
 
+> **Реализовано 14 ноября**, формат зафиксирован в §3.11.
+
+
+
 Создаёт заявку по подтверждённому preview. **Скоуп:** `absence:self:write`.
 
 **Запрос**
@@ -742,6 +876,10 @@ GET /api/v1/kb/search?q=доступ+к+jira&limit=10
 - без токена → `401 UNAUTHORIZED`.
 
 ### 10.5 `GET /api/v1/requests` и `GET /api/v1/requests/{id}`
+
+> **Реализовано 14 ноября**, формат зафиксирован в §3.12–3.13.
+
+
 
 **Скоуп:** `request:self` (свои), `*:approve:team` (команды).
 

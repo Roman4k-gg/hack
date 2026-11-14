@@ -199,6 +199,73 @@ else
     fail "mock-логин vera@demo.local не выдал токен"
 fi
 
+section 'Действия (отгул)'
+
+PREVIEW=$(curl -sS --max-time 10 -X POST "$CORE_URL/api/v1/requests/absence/preview" \
+    "${AUTH[@]}" -H 'Content-Type: application/json' \
+    -d '{"date_from":"2026-11-24","date_to":"2026-11-24","absence_type":"day_off"}')
+
+PREVIEW_TOKEN=$(json_get "d['confirmation_token']" <<<"$PREVIEW")
+PREVIEW_ID=$(json_get "d['preview_id']" <<<"$PREVIEW")
+
+if [ -n "${PREVIEW_TOKEN:-}" ]; then
+    ok "POST /api/v1/requests/absence/preview: черновик и токен подтверждения"
+else
+    fail "preview не вернул токен: $PREVIEW"
+fi
+
+if [ -n "${PREVIEW_TOKEN:-}" ]; then
+    KEY="smoke-$(date +%s)"
+
+    CREATED=$(curl -sS --max-time 10 -X POST "$CORE_URL/api/v1/requests/absence" \
+        "${AUTH[@]}" -H 'Content-Type: application/json' \
+        -d "{\"preview_id\":\"$PREVIEW_ID\",\"confirmation_token\":\"$PREVIEW_TOKEN\",\"idempotency_key\":\"$KEY\"}")
+
+    REQUEST_ID=$(json_get "d['request_id']" <<<"$CREATED")
+    STATUS=$(json_get "d['status']" <<<"$CREATED")
+    EXTERNAL=$(json_get "d['external_id']" <<<"$CREATED")
+
+    if [ -n "${REQUEST_ID:-}" ] && [ "${STATUS:-}" = "pending" ]; then
+        ok "POST /api/v1/requests/absence: заявка создана, статус $STATUS, внешний id $EXTERNAL"
+    else
+        fail "заявка не создана: $CREATED"
+    fi
+
+    REPEAT=$(curl -sS --max-time 10 -X POST "$CORE_URL/api/v1/requests/absence" \
+        "${AUTH[@]}" -H 'Content-Type: application/json' \
+        -d "{\"preview_id\":\"$PREVIEW_ID\",\"confirmation_token\":\"$PREVIEW_TOKEN\",\"idempotency_key\":\"$KEY\"}")
+
+    if [ "$(json_get "d['request_id']" <<<"$REPEAT")" = "$REQUEST_ID" ]; then
+        ok "идемпотентность: повтор с тем же ключом вернул ту же заявку"
+    else
+        fail "идемпотентность нарушена: $REPEAT"
+    fi
+
+    LIST=$(curl -sS --max-time 10 "$CORE_URL/api/v1/requests" "${AUTH[@]}")
+    if [ "$(json_get "len(d['items'])" <<<"$LIST")" -ge 1 ]; then
+        ok "GET /api/v1/requests: заявка сохранилась и видна в списке"
+    else
+        fail "заявка не сохранилась: $LIST"
+    fi
+
+    DETAIL=$(curl -sS --max-time 10 "$CORE_URL/api/v1/requests/$REQUEST_ID" "${AUTH[@]}")
+    if [ "$(json_get "len(d['history'])" <<<"$DETAIL")" -ge 1 ]; then
+        ok "GET /api/v1/requests/{id}: история статусов на месте"
+    else
+        fail "в заявке нет истории: $DETAIL"
+    fi
+fi
+
+code=$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' -X POST "$CORE_URL/api/v1/requests/absence" \
+    "${AUTH[@]}" -H 'Content-Type: application/json' \
+    -d '{"preview_id":"x","confirmation_token":"","idempotency_key":"smoke-empty"}')
+
+if [ "$code" = "401" ]; then
+    ok "создание без токена подтверждения → 401"
+else
+    fail "создание без токена → $code (ожидался 401)"
+fi
+
 section 'Чат (SSE)'
 
 STREAM=$(curl -sS --max-time 15 -N -X POST "$CORE_URL/api/v1/chat/stream" \

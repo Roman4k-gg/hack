@@ -7,11 +7,13 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"ai-buddy/core/internal/api"
 	"ai-buddy/core/internal/audit"
 	"ai-buddy/core/internal/auth"
 	"ai-buddy/core/internal/chat"
+	"ai-buddy/core/internal/integrations"
 	"ai-buddy/core/internal/kb"
 	"ai-buddy/core/internal/onboarding"
 	"ai-buddy/core/internal/platform/config"
@@ -20,6 +22,7 @@ import (
 	"ai-buddy/core/internal/platform/logging"
 	"ai-buddy/core/internal/platform/ratelimit"
 	"ai-buddy/core/internal/platform/redis"
+	"ai-buddy/core/internal/requests"
 	"ai-buddy/core/internal/team"
 )
 
@@ -81,6 +84,16 @@ func main() {
 	kbService := kb.NewService(kb.NewPostgresStore(store.Pool()))
 	kbHandler := kb.NewHandler(kbService, logger)
 
+	absenceService := requests.NewAbsenceAdapter(integrations.NewMockAbsence(150 * time.Millisecond))
+	requestsService := requests.NewService(
+		requests.NewPostgresStore(store.Pool()),
+		requests.NewRedisTokenStore(cache.Client()),
+		absenceService,
+		recorder,
+		logger,
+	)
+	requestsHandler := requests.NewHandler(requestsService, logger)
+
 	limiter := ratelimit.New(ratelimit.NewRedisBackend(cache.Client()), cfg.RateLimitRPS)
 	chatService := chat.NewService(chat.Config{
 		AIURL:   cfg.AIURL,
@@ -96,6 +109,7 @@ func main() {
 		Chat:       chatHandler,
 		Team:       teamHandler,
 		KB:         kbHandler,
+		Requests:   requestsHandler,
 		Tokens:     tokens,
 	}))
 
