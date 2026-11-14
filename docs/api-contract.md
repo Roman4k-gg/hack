@@ -136,12 +136,7 @@ Mock-логин по email. Пароля нет: любой email из табл�
           "due_on": "2026-11-11T00:00:00Z",
           "position": 1,
           "completed_at": "2026-11-13T07:53:07.712389Z"
-        }ailed to solve: DeadlineExceeded: golang:1.23-alpine: failed to resolve source metadata for docker.io/library/golang:1.23-alpine: failed to do request: Head "https://registry-1.docker.io/v2/library/golang/manifests/1.23-alpine": context deadline exceeded
-
-
-What's next:
-    Debug this Compose error with Gordon → docker ai "help me fix this compose error"
-make: *** [Makefile:43: up] Ошибка 1
+        }
       ]
     }
   ],
@@ -332,6 +327,83 @@ SSE-прокси к AI-сервису. Клиентский JWT пробрасы
 
 ---
 
+### 3.8 `GET /api/v1/kb/search`
+
+Поиск по базе знаний с ACL. **Реализовано 14 ноября.** Формат полностью совпадает
+с §10.1 — контракт для MCP и для фронта один.
+
+**Скоупы:** `kb:read` (public), `kb:read:team` (своя команда), `kb:read:hr` (HR-документы).
+Админ (`*`) видит всё.
+
+**Запрос**
+
+```
+GET /api/v1/kb/search?q=доступ к Jira&limit=10
+```
+
+**Ответ `200`**
+
+```json
+{
+  "items": [
+    {
+      "document_id": "55555555-5555-5555-5555-555555555501",
+      "title": "Как получить доступ к Jira",
+      "summary": "Пошаговая инструкция для стажёров команды Search.",
+      "url": "https://demo.local/docs/jira-access",
+      "team": "Search",
+      "owner": "petr@demo.local",
+      "updated_at": "2026-11-14T09:00:00Z",
+      "stale": false,
+      "score": 1,
+      "chunk": "1. Напишите наставнику в чат. 2. Наставник создаёт заявку в IT-портале."
+    }
+  ],
+  "total": 1
+}
+```
+
+| Поле | Тип | Комментарий |
+|---|---|---|
+| `items[].document_id` | string | id документа |
+| `items[].title` / `summary` / `url` | string | заголовок, описание, ссылка на источник |
+| `items[].team` | string | команда-владелец, пустая строка если документ общий |
+| `items[].owner` | string | email владельца документа |
+| `items[].updated_at` | date | дата обновления, по ней считается `stale` |
+| `items[].stale` | bool | `true`, если документ старше 180 дней |
+| `items[].score` | number | релевантность: title → 1.0, summary → 0.85, чанк → 0.7, иначе 0.5 |
+| `items[].chunk` | string | совпавший кусок текста — его и цитирует агент |
+| `total` | number | сколько документов вернулось |
+
+**Ошибки:** `400 VALIDATION_ERROR` (пустой `q`), `403 FORBIDDEN` (нет ни одного kb-скоупа), `401 UNAUTHORIZED`.
+
+### 3.9 `GET /api/v1/kb/documents/{id}`
+
+Документ целиком. **Реализовано 14 ноября.** Формат совпадает с §10.2.
+
+**Скоупы:** те же, что и в §3.8, плюс проверка ACL на уровне документа.
+
+**Ответ `200`**
+
+```json
+{
+  "document_id": "55555555-5555-5555-5555-555555555501",
+  "title": "Как получить доступ к Jira",
+  "summary": "Пошаговая инструкция для стажёров команды Search.",
+  "content": "1. Напишите наставнику в чат. ...",
+  "url": "https://demo.local/docs/jira-access",
+  "team": "Search",
+  "team_id": "11111111-1111-1111-1111-111111111111",
+  "owner": "petr@demo.local",
+  "updated_at": "2026-11-14T09:00:00Z",
+  "stale": false,
+  "visibility": "team",
+  "tags": ["jira", "доступ", "access", "search"]
+}
+```
+
+**Ошибки:** `403 FORBIDDEN` (документ есть, но недоступен роли), `404 NOT_FOUND` (документа нет).
+
 ## 4. Ошибки
 
 Единый конверт (`core/internal/platform/errors/errors.go`):
@@ -517,6 +589,8 @@ curl -s -X PATCH http://localhost:8081/api/v1/onboarding/items/<item-id> \
 
 ### 10.1 `GET /api/v1/kb/search`
 
+> **Реализовано 14 ноября**, формат зафиксирован в §3.8.
+
 Поиск по документам с ACL. **Скоуп:** `kb:read` (public) / `kb:read:team` (своя команда) / `kb:read:hr` (HR-документы).
 
 **Запрос**
@@ -559,6 +633,8 @@ GET /api/v1/kb/search?q=доступ+к+jira&limit=10
 **Ошибки:** `401`, `403` (нет скоупа `kb:read`).
 
 ### 10.2 `GET /api/v1/kb/documents/{id}`
+
+> **Реализовано 14 ноября**, формат зафиксирован в §3.9.
 
 Документ целиком. **Скоуп:** `kb:read*` плюс ACL на уровне документа.
 

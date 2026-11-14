@@ -156,6 +156,49 @@ else
     fail "mock-логин petr@demo.local не выдал токен"
 fi
 
+section 'База знаний'
+
+KB_QUERY=$(python3 -c 'import urllib.parse;print(urllib.parse.quote("доступ к Jira"))' 2>/dev/null || echo 'access')
+
+KB=$(curl -sS --max-time 10 "$CORE_URL/api/v1/kb/search?q=$KB_QUERY" "${AUTH[@]}")
+
+KB_COUNT=$(json_get "d['total']" <<<"$KB")
+KB_TITLE=$(json_get "d['items'][0]['title']" <<<"$KB")
+
+if [ "${KB_COUNT:-0}" -gt 0 ]; then
+    ok "GET /api/v1/kb/search: найдено $KB_COUNT, первый «$KB_TITLE»"
+else
+    fail "GET /api/v1/kb/search ничего не нашёл: $KB"
+fi
+
+KB_DOC=$(json_get "d['items'][0]['document_id']" <<<"$KB")
+
+if [ -n "${KB_DOC:-}" ]; then
+    BODY=$(curl -sS --max-time 10 "$CORE_URL/api/v1/kb/documents/$KB_DOC" "${AUTH[@]}")
+
+    if [ "$(json_get "d['document_id']" <<<"$BODY")" = "$KB_DOC" ]; then
+        ok "GET /api/v1/kb/documents/{id}: документ отдаётся с владельцем и датой"
+    else
+        fail "GET /api/v1/kb/documents/{id} вернул: $BODY"
+    fi
+fi
+
+OTHER_TOKEN=$(json_get "d['token']" <<<"$(curl -sS --max-time 10 -X POST "$CORE_URL/api/v1/auth/login" -H 'Content-Type: application/json' -d '{"email":"vera@demo.local"}')")
+
+if [ -n "${OTHER_TOKEN:-}" ]; then
+    OTHER=$(curl -sS --max-time 10 "$CORE_URL/api/v1/kb/search?q=$KB_QUERY" -H "Authorization: Bearer $OTHER_TOKEN")
+    OTHER_COUNT=$(json_get "d['total']" <<<"$OTHER")
+    OTHER_TEAM=$(json_get "d['items'][0]['team']" <<<"$OTHER")
+
+    if [ "${OTHER_COUNT:-0}" -lt "${KB_COUNT:-0}" ] && [ "${OTHER_TEAM:-}" != "Search" ]; then
+        ok "ACL: стажёр из Ads не видит team-документы Search (найдено $OTHER_COUNT)"
+    else
+        fail "ACL нарушен: стажёр из Ads видит $OTHER_COUNT документов, первый «$OTHER_TEAM»"
+    fi
+else
+    fail "mock-логин vera@demo.local не выдал токен"
+fi
+
 section 'Чат (SSE)'
 
 STREAM=$(curl -sS --max-time 15 -N -X POST "$CORE_URL/api/v1/chat/stream" \
