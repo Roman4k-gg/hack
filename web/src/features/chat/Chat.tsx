@@ -1,5 +1,5 @@
 import { useChatStore } from './chatStore';
-import { useChatSession } from './hooks/useChatSession.ts';
+import { useChatSession } from './hooks/useChatSession';
 import { MessageList } from './components/MessageList';
 import { Composer } from './components/Composer';
 import { StreamingIndicator } from './components/StreamingIndicator';
@@ -71,7 +71,7 @@ export function Chat() {
                 </div>
             )}
 
-            <Composer onSend={send} disabled={busy} />
+            <Composer onSend={send} onStop={stop} disabled={busy} />
         </section>
     );
 }
