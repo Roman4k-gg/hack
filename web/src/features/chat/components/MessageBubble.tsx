@@ -2,6 +2,7 @@ import Markdown from 'react-markdown';
 import type { ChatMessage } from '../types';
 import { CitationChip } from './CitationChip';
 import { ToolCallCard } from './ToolCallCard';
+import { AnswerDetails } from './AnswerDetails';
 
 interface MessageBubbleProps {
     message: ChatMessage;
@@ -58,6 +59,8 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                     ))}
                 </div>
             )}
+
+            {!isUser && <AnswerDetails message={message} />}
         </article>
     );
 }
