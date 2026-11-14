@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createSSEParser } from '../../../lib/sse/parseSSE';
 import type { SSEEvent } from '../../../lib/sse/parseSSE';
@@ -7,15 +6,15 @@ interface ChatStreamOptions {
     url: string;
     body: unknown;
     headers?: Record<string, string>;
-    onEvent: (event: SSEEvent) => void;
-    onFailure?: (error: Error) => void;
+    onEvent: (event: SSEEvent) => boolean | void;
+    onComplete?: () => void;
+    onFailure?: (error: Error, httpStatus?: number) => void;
 }
 
 type StreamStatus = 'idle' | 'streaming' | 'error';
 
 export function useChatStream() {
     const controllerRef = useRef<AbortController | null>(null);
-
     const [status, setStatus] = useState<StreamStatus>('idle');
     const [error, setError] = useState<string | null>(null);
 
@@ -30,12 +29,16 @@ export function useChatStream() {
         body,
         headers,
         onEvent,
+        onComplete,
         onFailure,
     }: ChatStreamOptions) => {
         controllerRef.current?.abort();
 
         const controller = new AbortController();
         controllerRef.current = controller;
+        let httpStatus: number | undefined;
+        let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+        let terminal = false;
 
         setStatus('streaming');
         setError(null);
@@ -52,58 +55,79 @@ export function useChatStream() {
                 signal: controller.signal,
             });
 
+            httpStatus = response.status;
+
             if (!response.ok) {
                 throw new Error(statusMessage(response.status));
+            }
+
+            const contentType = response.headers.get('content-type') ?? '';
+
+            if (!contentType.toLowerCase().includes('text/event-stream')) {
+                throw new Error('Сервер вернул неверный формат ответа');
             }
 
             if (!response.body) {
                 throw new Error('Сервер не вернул поток данных');
             }
 
-            const reader = response.body.getReader();
+            reader = response.body.getReader();
             const decoder = new TextDecoder();
 
             const parser = createSSEParser((event) => {
-                if (!controller.signal.aborted) {
-                    onEvent(event);
+                if (!controller.signal.aborted && !terminal) {
+                    terminal = onEvent(event) === true;
                 }
             });
 
-            while (!controller.signal.aborted) {
+            while (!controller.signal.aborted && !terminal) {
                 const { done, value } = await reader.read();
 
-                if (done) {
-                    break;
-                }
+                if (done) break;
 
                 parser.feed(decoder.decode(value, { stream: true }));
             }
 
             if (!controller.signal.aborted) {
-                parser.feed(decoder.decode());
-                parser.flush();
+                if (!terminal) {
+                    parser.feed(decoder.decode());
+                    parser.flush();
+                }
+
+                onComplete?.();
             }
         } catch (err) {
-            if (controller.signal.aborted) {
+            if (
+                controller.signal.aborted ||
+                controllerRef.current !== controller
+            ) {
                 return;
             }
 
-            if (controllerRef.current === controller) {
-                const failure =
-                    err instanceof Error
-                        ? err
-                        : new Error('Неизвестная ошибка');
+            const failure = err instanceof Error
+                ? err
+                : new Error('Не удалось получить ответ');
 
-                setError(failure.message);
-                setStatus('error');
-                onFailure?.(failure);
-            }
+            setError(failure.message);
+            setStatus('error');
+            onFailure?.(failure, httpStatus);
         } finally {
+            controller.abort();
+
+            if (reader) {
+                try {
+                    await reader.cancel();
+                } catch {
+                    void 0;
+                }
+
+                reader.releaseLock();
+            }
+
             if (controllerRef.current === controller) {
                 controllerRef.current = null;
-
                 setStatus((current) =>
-                    current === 'streaming' ? 'idle' : current
+                    current === 'streaming' ? 'idle' : current,
                 );
             }
         }
@@ -127,15 +151,20 @@ export function useChatStream() {
 
 function statusMessage(status: number): string {
     switch (status) {
+        case 400:
+            return 'Не удалось отправить сообщение. Проверь текст запроса.';
         case 401:
-            return 'Сессия истекла, войдите заново';
+            return 'Сессия истекла. Войди заново.';
+        case 403:
+            return 'Для твоей роли чат недоступен.';
         case 429:
-            return 'Слишком много запросов, попробуйте позже';
+            return 'Слишком много запросов. Попробуй немного позже.';
+        case 502:
         case 503:
-            return 'Ассистент сейчас недоступен';
+            return 'Ассистент сейчас недоступен.';
         case 504:
-            return 'Ответ ассистента не успел прийти вовремя';
+            return 'Ассистент не успел ответить. Попробуй ещё раз.';
         default:
-            return `Ошибка сервера: ${status}`;
+            return `Не удалось получить ответ. Код ошибки: ${status}.`;
     }
 }
