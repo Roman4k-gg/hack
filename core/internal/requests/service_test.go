@@ -168,7 +168,7 @@ func newService(t *testing.T) (*Service, *fakeStore, *fakeTokens, *fakeAbsence) 
 		result: AbsenceResult{ExternalID: "ABS-1024", Status: StatusPending},
 	}
 
-	service := NewService(store, tokens, absence, nil, nil)
+	service := NewService(store, tokens, absence, nil, nil, nil)
 	service.now = func() time.Time { return time.Date(2026, 11, 14, 12, 0, 0, 0, time.UTC) }
 
 	return service, store, tokens, absence
@@ -382,7 +382,7 @@ func TestGetRequestOfAnotherUserIsForbidden(t *testing.T) {
 func TestServiceWithoutStoreFails(t *testing.T) {
 	t.Parallel()
 
-	service := NewService(nil, nil, nil, nil, nil)
+	service := NewService(nil, nil, nil, nil, nil, nil)
 
 	_, err := service.PreviewAbsence(context.Background(), intern(), AbsenceInput{
 		DateFrom: "2026-11-20", DateTo: "2026-11-20", AbsenceType: "day_off",

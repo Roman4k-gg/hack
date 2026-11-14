@@ -25,6 +25,11 @@ const (
 	ScopeAbsenceSelfWrite   = "absence:self:write"
 	ScopeRequestSelf        = "request:self"
 	ScopeAbsenceApproveTeam = "absence:approve:team"
+
+	ScopeAccessSelf      = "access:self"
+	ScopeAccessSelfWrite = "access:self:write"
+
+	ScopeAdminFlags = "admin:flags"
 )
 
 const (
@@ -39,10 +44,12 @@ var roleScopes = map[string][]string{
 	RoleIntern: {
 		ScopePlanRead, ScopePlanWrite, ScopeChat, ScopeKBRead, ScopeKBReadTeam,
 		ScopeAbsenceSelf, ScopeAbsenceSelfWrite, ScopeRequestSelf,
+		ScopeAccessSelf, ScopeAccessSelfWrite,
 	},
 	RoleMentor: {
 		ScopePlanRead, ScopePlanWrite, ScopeChat, ScopeKBRead, ScopeKBReadTeam,
 		ScopeTeamRead, ScopeAnalyticsTeam, ScopeAbsenceSelf, ScopeAbsenceSelfWrite, ScopeRequestSelf,
+		ScopeAccessSelf, ScopeAccessSelfWrite,
 	},
 	RoleManager: {
 		ScopePlanRead, ScopePlanWrite, ScopeChat, ScopeKBRead, ScopeKBReadTeam,

@@ -652,6 +652,33 @@ func seedActivity(ctx context.Context, tx pgx.Tx) error {
 		},
 	}
 
+	questions := []struct {
+		id       string
+		question string
+		hits     int
+	}{
+		{"77777777-7777-7777-7777-777777777711", "где взять доступ к Jira?", 4},
+		{"77777777-7777-7777-7777-777777777712", "что такое экватор?", 3},
+		{"77777777-7777-7777-7777-777777777713", "как оформить командировку?", 3},
+		{"77777777-7777-7777-7777-777777777714", "правила работы с секретами", 2},
+		{"77777777-7777-7777-7777-777777777715", "как настроить vpn?", 2},
+	}
+
+	for _, item := range questions {
+		for hit := 0; hit < item.hits; hit++ {
+			_, err := tx.Exec(ctx, `
+				INSERT INTO events (id, user_id, name, entity_type, entity_id, payload, trace_id, created_at)
+				VALUES (gen_random_uuid(), $1::uuid, 'chat_stream_started', 'chat', $1::text, $2::jsonb, 'seed', now() - $3::interval)`,
+				userDasha,
+				fmt.Sprintf(`{"question":%q,"source":"seed"}`, item.question),
+				fmt.Sprintf("%d hours", hit*7),
+			)
+			if err != nil {
+				return fmt.Errorf("seed: insert chat question %s: %w", item.question, err)
+			}
+		}
+	}
+
 	for _, e := range events {
 		_, err := tx.Exec(ctx, `
 			INSERT INTO events (id, user_id, name, entity_type, entity_id, payload, trace_id)

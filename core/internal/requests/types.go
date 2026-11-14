@@ -78,6 +78,7 @@ type Record struct {
 	PreviewID      string
 	IdempotencyKey string
 	Approver       *Person
+	Position       int
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
@@ -108,6 +109,32 @@ type AbsenceInput struct {
 type AbsenceResult struct {
 	ExternalID string
 	Status     string
+}
+
+type AccessItem struct {
+	System   string `json:"system"`
+	Reason   string `json:"reason"`
+	Approver string `json:"approver"`
+}
+
+type AccessPreview struct {
+	PreviewID         string       `json:"preview_id"`
+	ConfirmationToken string       `json:"confirmation_token"`
+	ExpiresAt         time.Time    `json:"expires_at"`
+	Bundle            string       `json:"bundle"`
+	Items             []AccessItem `json:"items"`
+}
+
+type AccessCreated struct {
+	RequestID  string `json:"request_id"`
+	System     string `json:"system"`
+	Status     string `json:"status"`
+	ExternalID string `json:"external_id"`
+}
+
+type AccessResult struct {
+	Requests []AccessCreated `json:"requests"`
+	NextStep string          `json:"next_step"`
 }
 
 type AbsenceService interface {

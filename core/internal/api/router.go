@@ -1,8 +1,10 @@
 package api
 
 import (
+	"ai-buddy/core/internal/analytics"
 	"ai-buddy/core/internal/auth"
 	"ai-buddy/core/internal/chat"
+	"ai-buddy/core/internal/flags"
 	"ai-buddy/core/internal/kb"
 	"ai-buddy/core/internal/onboarding"
 	"ai-buddy/core/internal/requests"
@@ -18,6 +20,8 @@ type Deps struct {
 	Team       *team.Handler
 	KB         *kb.Handler
 	Requests   *requests.Handler
+	Flags      *flags.Handler
+	Analytics  *analytics.Handler
 	Tokens     *auth.TokenManager
 }
 
@@ -35,6 +39,13 @@ func New(deps Deps) chi.Router {
 		r.Mount("/team", deps.Team.Router())
 		r.Mount("/kb", deps.KB.Router())
 		r.Mount("/requests", deps.Requests.Router())
+		r.Mount("/analytics", deps.Analytics.Router())
+
+		admin := chi.NewRouter()
+		admin.Mount("/feature-flags", deps.Flags.Router())
+		admin.Mount("/analytics", deps.Analytics.AdminRouter())
+
+		r.Mount("/admin", admin)
 	})
 
 	return router

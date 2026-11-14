@@ -45,16 +45,25 @@ type Service struct {
 	store    Store
 	tokens   TokenStore
 	absence  AbsenceService
+	bundles  AccessBundleStore
 	recorder *audit.Recorder
 	logger   *slog.Logger
 	now      func() time.Time
 }
 
-func NewService(store Store, tokens TokenStore, absence AbsenceService, recorder *audit.Recorder, logger *slog.Logger) *Service {
+func NewService(
+	store Store,
+	tokens TokenStore,
+	absence AbsenceService,
+	bundles AccessBundleStore,
+	recorder *audit.Recorder,
+	logger *slog.Logger,
+) *Service {
 	return &Service{
 		store:    store,
 		tokens:   tokens,
 		absence:  absence,
+		bundles:  bundles,
 		recorder: recorder,
 		logger:   logger,
 		now:      time.Now,

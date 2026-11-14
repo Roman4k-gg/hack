@@ -42,11 +42,11 @@ func (s *PostgresStore) Create(ctx context.Context, record Record) (Record, erro
 	var createdID string
 
 	err = s.pool.QueryRow(ctx, `
-		INSERT INTO requests (user_id, kind, status, title, payload, external_id, preview_id, idempotency_key, approver_id)
-		VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9)
+		INSERT INTO requests (user_id, kind, status, title, payload, external_id, preview_id, idempotency_key, approver_id, position)
+		VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10)
 		RETURNING id::text, created_at, updated_at`,
 		record.UserID, record.Kind, record.Status, record.Title, string(payload),
-		record.ExternalID, record.PreviewID, record.IdempotencyKey, approverValue,
+		record.ExternalID, record.PreviewID, record.IdempotencyKey, approverValue, record.Position,
 	).Scan(&createdID, &record.CreatedAt, &record.UpdatedAt)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -79,7 +79,7 @@ func (s *PostgresStore) ByID(ctx context.Context, requestID string) (Record, err
 
 	err := s.pool.QueryRow(ctx, `
 		SELECT r.id::text, r.user_id::text, r.kind, r.status, r.title, r.payload, r.external_id,
-		       r.preview_id, r.idempotency_key, r.created_at, r.updated_at,
+		       r.preview_id, r.idempotency_key, r.position, r.created_at, r.updated_at,
 		       COALESCE(a.id::text, ''), COALESCE(a.full_name, '')
 		  FROM requests r
 		  LEFT JOIN users a ON a.id = r.approver_id
@@ -95,6 +95,7 @@ func (s *PostgresStore) ByID(ctx context.Context, requestID string) (Record, err
 		&record.ExternalID,
 		&record.PreviewID,
 		&record.IdempotencyKey,
+		&record.Position,
 		&record.CreatedAt,
 		&record.UpdatedAt,
 		&approverID,
@@ -154,7 +155,7 @@ func (s *PostgresStore) ListByUser(ctx context.Context, userID string) ([]Record
 
 	rows, err := s.pool.Query(ctx, `
 		SELECT r.id::text, r.user_id::text, r.kind, r.status, r.title, r.payload, r.external_id,
-		       r.preview_id, r.idempotency_key, r.created_at, r.updated_at,
+		       r.preview_id, r.idempotency_key, r.position, r.created_at, r.updated_at,
 		       COALESCE(a.id::text, ''), COALESCE(a.full_name, '')
 		  FROM requests r
 		  LEFT JOIN users a ON a.id = r.approver_id
@@ -184,6 +185,7 @@ func (s *PostgresStore) ListByUser(ctx context.Context, userID string) ([]Record
 			&record.ExternalID,
 			&record.PreviewID,
 			&record.IdempotencyKey,
+			&record.Position,
 			&record.CreatedAt,
 			&record.UpdatedAt,
 			&approverID,
@@ -283,6 +285,41 @@ func (s *PostgresStore) approver(ctx context.Context, userID string) (string, st
 	}
 
 	return approverID, approverName, nil
+}
+
+func (s *PostgresStore) Bundle(ctx context.Context, bundle string) ([]AccessItem, error) {
+	if s == nil || s.pool == nil {
+		return nil, fmt.Errorf("requests: postgres pool is not initialised")
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT system, reason, approver
+		  FROM access_bundles
+		 WHERE bundle = $1
+		 ORDER BY position`,
+		bundle,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("requests: load access bundle: %w", err)
+	}
+	defer rows.Close()
+
+	items := []AccessItem{}
+
+	for rows.Next() {
+		var item AccessItem
+		if err := rows.Scan(&item.System, &item.Reason, &item.Approver); err != nil {
+			return nil, fmt.Errorf("requests: scan access item: %w", err)
+		}
+
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("requests: iterate access bundle: %w", err)
+	}
+
+	return items, nil
 }
 
 func isUniqueViolation(err error) bool {

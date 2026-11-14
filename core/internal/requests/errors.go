@@ -14,4 +14,5 @@ var (
 	ErrRequestNotFound = errors.New("requests: request not found")
 	ErrForbidden       = errors.New("requests: request belongs to another user")
 	ErrUpstream        = errors.New("requests: corporate service is unavailable")
+	ErrBundleNotFound  = errors.New("requests: access bundle not found")
 )

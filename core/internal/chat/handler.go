@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"ai-buddy/core/internal/audit"
 	"ai-buddy/core/internal/platform/errors"
@@ -70,6 +71,7 @@ func (h *Handler) handleStream(w http.ResponseWriter, r *http.Request) {
 
 	h.recordEvent(r, principal, "chat_stream_started", map[string]any{
 		"message_length": len(req.Message),
+		"question":       questionForAnalytics(req.Message),
 	})
 
 	w.Header().Set("Content-Type", stream.ContentType)
@@ -112,6 +114,17 @@ func (h *Handler) pipe(w http.ResponseWriter, r *http.Request, stream *Stream) i
 	}
 
 	return written
+}
+
+const maxQuestionLength = 160
+
+func questionForAnalytics(message string) string {
+	question := strings.TrimSpace(message)
+	if len(question) > maxQuestionLength {
+		return question[:maxQuestionLength]
+	}
+
+	return question
 }
 
 func (h *Handler) recordEvent(r *http.Request, principal reqctx.Principal, name string, payload map[string]any) {

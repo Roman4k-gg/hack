@@ -31,6 +31,12 @@ func (h *Handler) Router() chi.Router {
 	router.With(rbac.RequireScopes(rbac.ScopeAbsenceSelfWrite)).
 		Post("/absence", h.handleCreate)
 
+	router.With(rbac.RequireScopes(rbac.ScopeAccessSelf)).
+		Post("/access/preview", h.handleAccessPreview)
+
+	router.With(rbac.RequireScopes(rbac.ScopeAccessSelfWrite)).
+		Post("/access", h.handleAccessCreate)
+
 	router.With(rbac.RequireScopes(rbac.ScopeRequestSelf)).
 		Get("/", h.handleList)
 
@@ -51,6 +57,10 @@ type createRequest struct {
 	PreviewID         string `json:"preview_id"`
 	ConfirmationToken string `json:"confirmation_token"`
 	IdempotencyKey    string `json:"idempotency_key"`
+}
+
+type accessPreviewRequest struct {
+	Bundle string `json:"bundle"`
 }
 
 func (h *Handler) handlePreview(w http.ResponseWriter, r *http.Request) {
@@ -107,6 +117,57 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, detail)
+}
+
+func (h *Handler) handleAccessPreview(w http.ResponseWriter, r *http.Request) {
+	principal, ok := reqctx.PrincipalFrom(r.Context())
+	if !ok {
+		errors.Write(w, r.Context(), http.StatusUnauthorized,
+			errors.New(errors.CodeUnauthorized, "Требуется авторизация"))
+		return
+	}
+
+	var input accessPreviewRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		errors.Write(w, r.Context(), http.StatusBadRequest,
+			errors.New(errors.CodeValidation, "Некорректный формат запроса").
+				WithDetail("reason", err.Error()))
+		return
+	}
+
+	preview, err := h.service.PreviewAccess(r.Context(), principal, input.Bundle)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, preview)
+}
+
+func (h *Handler) handleAccessCreate(w http.ResponseWriter, r *http.Request) {
+	principal, ok := reqctx.PrincipalFrom(r.Context())
+	if !ok {
+		errors.Write(w, r.Context(), http.StatusUnauthorized,
+			errors.New(errors.CodeUnauthorized, "Требуется авторизация"))
+		return
+	}
+
+	var input createRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		errors.Write(w, r.Context(), http.StatusBadRequest,
+			errors.New(errors.CodeValidation, "Некорректный формат запроса").
+				WithDetail("reason", err.Error()))
+		return
+	}
+
+	result, err := h.service.CreateAccess(r.Context(), principal,
+		input.PreviewID, input.ConfirmationToken, input.IdempotencyKey)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *Handler) handleList(w http.ResponseWriter, r *http.Request) {
@@ -166,6 +227,9 @@ func (h *Handler) writeError(w http.ResponseWriter, r *http.Request, err error) 
 	case stderrors.Is(err, ErrForbidden):
 		errors.Write(w, r.Context(), http.StatusForbidden,
 			errors.New(errors.CodeForbidden, "Недостаточно прав для этого действия"))
+	case stderrors.Is(err, ErrBundleNotFound):
+		errors.Write(w, r.Context(), http.StatusNotFound,
+			errors.New(errors.CodeNotFound, "Пакет доступов не найден"))
 	case stderrors.Is(err, ErrRequestNotFound):
 		errors.Write(w, r.Context(), http.StatusNotFound,
 			errors.New(errors.CodeNotFound, "Заявка не найдена"))

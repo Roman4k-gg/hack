@@ -24,7 +24,7 @@ func newTestHandler(t *testing.T) (*Handler, *fakeStore, *fakeTokens) {
 		result: AbsenceResult{ExternalID: "ABS-1024", Status: StatusPending},
 	}
 
-	service := NewService(store, tokens, absence, nil, nil)
+	service := NewService(store, tokens, absence, nil, nil, nil)
 
 	return NewHandler(service, nil), store, tokens
 }
