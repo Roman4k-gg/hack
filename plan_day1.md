@@ -75,8 +75,8 @@
 - [x] **K-04** Сделать Zustand `chatStore` и Zod-схемы событий
 - [x] **K-05** Сделать мок-поток и состояния: empty, loading, streaming, error, retry, stop
 - [ ] **K-06** Подключить реальный `/api/v1/chat/stream` через Vite proxy
-- [ ] **K-07** Добавить UX: автопрокрутка, markdown, code blocks, цитаты, tool card
-- [ ] **K-08** Написать Vitest на парсер/стор и Playwright smoke
+- [x] **K-07** Добавить UX: автопрокрутка, markdown, code blocks, цитаты, tool card
+- [x] **K-08** Написать Vitest на парсер/стор и Playwright smoke
 - [ ] **K-09** Прогнать демо-путь и пофиксить баги
 
 ### P1
