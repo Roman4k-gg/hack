@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
+import { ArrowRight } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuthStore } from '@/features/auth/authStore';
@@ -219,17 +221,19 @@ function MemberRow({ member }: { member: TeamMember }) {
       ? { label: 'Нужна помощь', tone: 'bg-alert-soft text-ink' }
       : { label: 'Идёт по плану', tone: 'bg-brand-soft text-ink' };
 
-  return (
-    <li
-      className={cn(
-        'border border-line bg-paper p-5',
-        member.at_risk && 'border-l-4 border-l-alert',
-      )}
-    >
+  const content = (
+    <>
       <div className="grid items-center gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1.4fr)_9.5rem_5rem] lg:gap-6">
         <div className="min-w-0">
-          <p className="truncate text-base font-extrabold">
-            {member.full_name}
+          <p className="flex items-center gap-1 text-base font-extrabold">
+            <span className="truncate">{member.full_name}</span>
+            {hasPlan && (
+              <ArrowRight
+                aria-hidden
+                strokeWidth={3}
+                className="h-4 w-4 shrink-0"
+              />
+            )}
           </p>
           <p className="truncate text-sm text-muted">
             {member.position || 'Стажёр'} · {member.team.name || 'без команды'}
@@ -298,6 +302,27 @@ function MemberRow({ member }: { member: TeamMember }) {
             </li>
           ))}
         </ul>
+      )}
+    </>
+  );
+
+  return (
+    <li
+      className={cn(
+        'border border-line bg-paper',
+        member.at_risk && 'border-l-4 border-l-alert',
+      )}
+    >
+      {hasPlan ? (
+        <Link
+          to="/team/$internId"
+          params={{ internId: member.id }}
+          className="block p-5 hover:bg-mist"
+        >
+          {content}
+        </Link>
+      ) : (
+        <div className="p-5">{content}</div>
       )}
     </li>
   );

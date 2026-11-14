@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/features/auth/authStore';
 import { ApiError } from '@/lib/api';
@@ -132,13 +132,17 @@ function MapSkeleton() {
   );
 }
 
-function PlanView({
+export function PlanView({
   plan,
   onChangeStatus,
+  header,
 }: {
   plan: Plan;
-  onChangeStatus: (itemId: string, status: ItemStatus, reason?: string) => void;
+  onChangeStatus?: (itemId: string, status: ItemStatus, reason?: string) => void;
+  header?: ReactNode;
 }) {
+  const readOnly = !onChangeStatus;
+
   if (plan.stages.length === 0) {
     return (
       <EmptyState
@@ -152,10 +156,14 @@ function PlanView({
 
   return (
     <section>
-      <p className="text-xs text-muted">Команда {plan.intern.team_name}</p>
-      <h1 className="mt-1 text-3xl font-extrabold tracking-tight">
-        Привет, {firstName}!
-      </h1>
+      {header ?? (
+        <>
+          <p className="text-xs text-muted">Команда {plan.intern.team_name}</p>
+          <h1 className="mt-1 text-3xl font-extrabold tracking-tight">
+            Привет, {firstName}!
+          </h1>
+        </>
+      )}
 
       <div className="mt-6 flex flex-col gap-5 lg:flex-row">
         <div className="bg-brand p-5 lg:flex-[2]">
@@ -173,8 +181,9 @@ function PlanView({
                 Все пункты плана выполнены
               </p>
               <p className="mt-1 text-sm">
-                Отличная работа! Если появятся вопросы — спроси наставника или
-                AI-наставника в чате.
+                {readOnly
+                  ? 'Стажёр прошёл весь план адаптации.'
+                  : 'Отличная работа! Если появятся вопросы — спроси наставника или AI-наставника в чате.'}
               </p>
             </>
           ) : (
@@ -183,7 +192,9 @@ function PlanView({
                 Пока нет доступных шагов
               </p>
               <p className="mt-1 text-sm">
-                Сними блокеры или уточни план у наставника.
+                {readOnly
+                  ? 'Оставшиеся пункты заблокированы или ещё не открыты.'
+                  : 'Сними блокеры или уточни план у наставника.'}
               </p>
             </>
           )}
@@ -252,11 +263,12 @@ function ItemCard({
   onChangeStatus,
 }: {
   item: PlanItem;
-  onChangeStatus: (itemId: string, status: ItemStatus, reason?: string) => void;
+  onChangeStatus?: (itemId: string, status: ItemStatus, reason?: string) => void;
 }) {
   const [blocking, setBlocking] = useState(false);
   const [reason, setReason] = useState('');
   const isBlocked = item.status === 'blocked';
+  const readOnly = !onChangeStatus;
 
   function submitBlock(event: FormEvent) {
     event.preventDefault();
@@ -266,7 +278,7 @@ function ItemCard({
       return;
     }
 
-    onChangeStatus(item.id, 'blocked', trimmed);
+    onChangeStatus?.(item.id, 'blocked', trimmed);
     setBlocking(false);
     setReason('');
   }
@@ -293,7 +305,7 @@ function ItemCard({
         )}
       </div>
 
-      {blocking ? (
+      {readOnly ? null : blocking ? (
         <form onSubmit={submitBlock} className="mt-2 flex flex-col gap-2">
           <input
             autoFocus
@@ -325,13 +337,13 @@ function ItemCard({
           {item.status !== 'in_progress' && (
             <StatusAction
               label={isBlocked ? 'Снять блок' : 'В работу'}
-              onClick={() => onChangeStatus(item.id, 'in_progress')}
+              onClick={() => onChangeStatus?.(item.id, 'in_progress')}
             />
           )}
           {item.status !== 'done' && (
             <StatusAction
               label="Готово"
-              onClick={() => onChangeStatus(item.id, 'done')}
+              onClick={() => onChangeStatus?.(item.id, 'done')}
             />
           )}
           {!isBlocked && (
