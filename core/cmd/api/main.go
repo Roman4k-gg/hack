@@ -7,11 +7,15 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"ai-buddy/core/internal/analytics"
 	"ai-buddy/core/internal/api"
 	"ai-buddy/core/internal/audit"
 	"ai-buddy/core/internal/auth"
 	"ai-buddy/core/internal/chat"
+	"ai-buddy/core/internal/flags"
+	"ai-buddy/core/internal/integrations"
 	"ai-buddy/core/internal/kb"
 	"ai-buddy/core/internal/onboarding"
 	"ai-buddy/core/internal/platform/config"
@@ -20,6 +24,7 @@ import (
 	"ai-buddy/core/internal/platform/logging"
 	"ai-buddy/core/internal/platform/ratelimit"
 	"ai-buddy/core/internal/platform/redis"
+	"ai-buddy/core/internal/requests"
 	"ai-buddy/core/internal/team"
 )
 
@@ -81,6 +86,24 @@ func main() {
 	kbService := kb.NewService(kb.NewPostgresStore(store.Pool()))
 	kbHandler := kb.NewHandler(kbService, logger)
 
+	absenceService := requests.NewAbsenceAdapter(integrations.NewMockAbsence(150 * time.Millisecond))
+	requestsStore := requests.NewPostgresStore(store.Pool())
+	requestsService := requests.NewService(
+		requestsStore,
+		requests.NewRedisTokenStore(cache.Client()),
+		absenceService,
+		requestsStore,
+		recorder,
+		logger,
+	)
+	requestsHandler := requests.NewHandler(requestsService, logger)
+
+	flagsService := flags.NewService(flags.NewPostgresStore(store.Pool()))
+	flagsHandler := flags.NewHandler(flagsService, logger)
+
+	analyticsService := analytics.NewService(analytics.NewPostgresStore(store.Pool()))
+	analyticsHandler := analytics.NewHandler(analyticsService, logger)
+
 	limiter := ratelimit.New(ratelimit.NewRedisBackend(cache.Client()), cfg.RateLimitRPS)
 	chatService := chat.NewService(chat.Config{
 		AIURL:   cfg.AIURL,
@@ -96,6 +119,9 @@ func main() {
 		Chat:       chatHandler,
 		Team:       teamHandler,
 		KB:         kbHandler,
+		Requests:   requestsHandler,
+		Flags:      flagsHandler,
+		Analytics:  analyticsHandler,
 		Tokens:     tokens,
 	}))
 

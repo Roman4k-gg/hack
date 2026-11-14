@@ -404,6 +404,282 @@ GET /api/v1/kb/search?q=доступ к Jira&limit=10
 
 **Ошибки:** `403 FORBIDDEN` (документ есть, но недоступен роли), `404 NOT_FOUND` (документа нет).
 
+### 3.10 `POST /api/v1/requests/absence/preview`
+
+Готовит черновик заявки на отгул. **Ничего не создаёт.** **Реализовано 14 ноября.**
+Формат совпадает с §10.3.
+
+**Скоуп:** `absence:self`
+
+**Запрос**
+
+```json
+{
+  "date_from": "2026-11-20",
+  "date_to": "2026-11-20",
+  "absence_type": "day_off",
+  "comment": "семейные обстоятельства"
+}
+```
+
+| Поле | Обязательное | Значения |
+|---|---|---|
+| `date_from` | да | `YYYY-MM-DD` |
+| `date_to` | да | `YYYY-MM-DD`, не раньше `date_from` |
+| `absence_type` | да | `vacation \| day_off \| sick_leave` |
+| `comment` | нет | до 500 символов |
+
+**Ответ `200`**
+
+```json
+{
+  "preview_id": "88552932-82cc-4ee3-acf0-87f03af07c0c",
+  "confirmation_token": "94182366-14fd-4aeb-827c-bd920c704265",
+  "expires_at": "2026-11-14T09:50:34Z",
+  "draft": {
+    "date_from": "2026-11-20",
+    "date_to": "2026-11-20",
+    "absence_type": "day_off",
+    "comment": "семейные обстоятельства"
+  },
+  "policy_notes": [
+    "Отгул согласует руководитель команды",
+    "В день отгула отчётность не требуется"
+  ]
+}
+```
+
+`confirmation_token` — одноразовый, живёт в Redis, TTL 10 минут.
+
+**Ошибки:** `400 VALIDATION_ERROR` (даты, тип, длинный комментарий), `403 FORBIDDEN` (нет скоупа).
+
+### 3.11 `POST /api/v1/requests/absence`
+
+Создаёт заявку по подтверждённому preview. **Реализовано 14 ноября.** Формат совпадает с §10.4.
+
+**Скоуп:** `absence:self:write`
+
+**Запрос**
+
+```json
+{
+  "preview_id": "88552932-82cc-4ee3-acf0-87f03af07c0c",
+  "confirmation_token": "94182366-14fd-4aeb-827c-bd920c704265",
+  "idempotency_key": "b7a1c0d2-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+}
+```
+
+**Ответ `200`**
+
+```json
+{
+  "request_id": "b9c6ab89-0327-4600-85dd-0f4bb82aafe0",
+  "kind": "absence",
+  "title": "Отгул 20.11.2026",
+  "status": "pending",
+  "external_id": "ABS-1025",
+  "payload": {
+    "date_from": "2026-11-20",
+    "date_to": "2026-11-20",
+    "absence_type": "day_off",
+    "comment": "семейные обстоятельства"
+  },
+  "approver": { "id": "22222222-2222-2222-2222-222222222226", "full_name": "Ольга Кузнецова" },
+  "next_step": "Заявка уйдёт руководителю; статус можно проверить в разделе «Заявки»",
+  "created_at": "2026-11-14T09:40:34Z",
+  "updated_at": "2026-11-14T09:40:34Z",
+  "history": [
+    { "from": "", "to": "pending", "comment": "Создана стажёром", "created_at": "2026-11-14T09:40:34Z" }
+  ]
+}
+```
+
+Правила:
+
+- `confirmation_token` одноразовый: повторное использование → `400 VALIDATION_ERROR`;
+- тот же `idempotency_key` → **тот же `request_id`**, вторая заявка не создаётся;
+- без токена → `401 UNAUTHORIZED`; без `idempotency_key` → `400 VALIDATION_ERROR`;
+- чужой токен → `403 FORBIDDEN`;
+- сбой корпоративного сервиса → `502 UPSTREAM_ERROR`.
+
+### 3.12 `GET /api/v1/requests`
+
+Список заявок текущего пользователя. **Реализовано 14 ноября.** Формат совпадает с §10.5.
+
+**Скоуп:** `request:self`
+
+**Ответ `200`**
+
+```json
+{
+  "items": [
+    {
+      "request_id": "b9c6ab89-0327-4600-85dd-0f4bb82aafe0",
+      "kind": "absence",
+      "title": "Отгул 20.11.2026",
+      "status": "pending",
+      "external_id": "ABS-1025",
+      "approver": { "id": "22222222-...", "full_name": "Ольга Кузнецова" },
+      "created_at": "2026-11-14T09:40:34Z",
+      "updated_at": "2026-11-14T09:40:34Z"
+    }
+  ]
+}
+```
+
+### 3.13 `GET /api/v1/requests/{id}`
+
+Детали заявки с историей статусов. **Реализовано 14 ноября.** Формат совпадает с §10.5.
+
+**Скоуп:** `request:self` (своя) или `absence:approve:team` (заявка команды)
+
+**Ошибки:** `403 FORBIDDEN` (чужая заявка без права согласования), `404 NOT_FOUND`.
+
+### 3.14 `POST /api/v1/requests/access/preview`
+
+Пакет доступов по роли. **Реализовано 15 ноября.** Формат совпадает с §10.6.
+
+**Скоуп:** `access:self`
+
+**Запрос**
+
+```json
+{ "bundle": "intern" }
+```
+
+**Ответ `200`**
+
+```json
+{
+  "preview_id": "a56ff7dd-d479-474d-b408-8b8f336767a2",
+  "confirmation_token": "0d8c9d70-1ccb-4858-b42f-866e6016b613",
+  "expires_at": "2026-11-14T10:20:07Z",
+  "bundle": "intern",
+  "items": [
+    { "system": "VPN", "reason": "Доступ в корпоративную сеть", "approver": "IT-отдел" },
+    { "system": "Jira", "reason": "Работа с задачами команды", "approver": "Наставник" }
+  ]
+}
+```
+
+**Ошибки:** `404 NOT_FOUND` (неизвестный пакет), `403 FORBIDDEN` (нет скоупа).
+
+### 3.15 `POST /api/v1/requests/access`
+
+Создаёт заявки по всему пакету. **Реализовано 15 ноября.**
+
+**Скоуп:** `access:self:write`
+
+**Запрос**
+
+```json
+{
+  "preview_id": "a56ff7dd-d479-474d-b408-8b8f336767a2",
+  "confirmation_token": "0d8c9d70-1ccb-4858-b42f-866e6016b613",
+  "idempotency_key": "b7a1c0d2-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+}
+```
+
+**Ответ `200`**
+
+```json
+{
+  "requests": [
+    { "request_id": "5ad06119-d0fc-4d16-b053-70f0d218720d", "system": "VPN", "status": "pending", "external_id": "ACC-C12D" },
+    { "request_id": "b71eacb9-f21d-4d70-82af-b66d6e68f4a5", "system": "Jira", "status": "pending", "external_id": "ACC-DBD2" }
+  ],
+  "next_step": "Заявки ушли наставнику и в IT-отдел; статус можно проверить в разделе «Заявки»"
+}
+```
+
+Правила те же, что в §3.11: токен одноразовый, повтор с тем же `idempotency_key`
+возвращает те же заявки, без токена → `401`, сбой сервиса → `502`.
+
+### 3.16 `GET /api/v1/analytics/top-questions`
+
+Топ вопросов команды по событиям чата. **Реализовано 15 ноября.**
+
+**Скоуп:** `analytics:team`
+
+**Ответ `200`** — массив (фронт принимает и массив, и `{items: []}`):
+
+```json
+[
+  { "question": "где взять доступ к Jira?", "count": 4 },
+  { "question": "что такое экватор?", "count": 3 }
+]
+```
+
+### 3.17 `GET /api/v1/analytics/content-gaps`
+
+Темы, по которым спрашивали, но ответа в базе знаний нет. **Реализовано 15 ноября.**
+
+**Скоуп:** `analytics:team`
+
+**Ответ `200`**
+
+```json
+[
+  { "topic": "что такое экватор?", "questions": 3, "reason": "missing" },
+  { "topic": "правила работы с секретами", "questions": 2, "reason": "outdated" }
+]
+```
+
+`reason`: `missing` — документа нет, `outdated` — документ есть, но старше 180 дней.
+Определение темы: из вопроса берутся значимые слова без стоп-слов, документ
+подбирается по совпадению с наибольшим числом слов.
+
+### 3.18 `GET /api/v1/admin/feature-flags`
+
+Список флагов. **Реализовано 15 ноября.**
+
+**Скоуп:** `admin:flags` (администратор)
+
+**Ответ `200`**
+
+```json
+[
+  { "key": "access_requests", "enabled": true, "rollout": 100, "description": "Заявки на доступы", "updated_at": "2026-11-14T10:09:59Z" }
+]
+```
+
+### 3.19 `PATCH /api/v1/admin/feature-flags/{key}`
+
+Включает или выключает флаг. **Реализовано 15 ноября.**
+
+**Скоуп:** `admin:flags`
+
+**Запрос**
+
+```json
+{ "enabled": false, "rollout": 50 }
+```
+
+`enabled` и `rollout` необязательны — отсутствующее поле не меняется.
+
+**Ответ `200`** — обновлённый флаг (форма как в §3.18).
+
+**Ошибки:** `400 VALIDATION_ERROR` (`rollout` вне 0–100), `403 FORBIDDEN` (нет скоупа).
+
+### 3.20 `GET /api/v1/admin/analytics/overview`
+
+Сводка для админ-панели. **Реализовано 15 ноября.**
+
+**Скоуп:** `analytics:team`
+
+**Ответ `200`**
+
+```json
+{
+  "interns": 6,
+  "questions": 14,
+  "requests": 4,
+  "pending": 4,
+  "blocked_items": 2,
+  "top_questions": [{ "question": "где взять доступ к Jira?", "count": 4 }]
+}
+```
+
 ## 4. Ошибки
 
 Единый конверт (`core/internal/platform/errors/errors.go`):
@@ -659,6 +935,10 @@ GET /api/v1/kb/search?q=доступ+к+jira&limit=10
 
 ### 10.3 `POST /api/v1/requests/absence/preview`
 
+> **Реализовано 14 ноября**, формат зафиксирован в §3.10.
+
+
+
 Готовит черновик заявки на отгул. **Ничего не создаёт.** **Скоуп:** `absence:self`.
 
 **Запрос**
@@ -704,6 +984,10 @@ GET /api/v1/kb/search?q=доступ+к+jira&limit=10
 
 ### 10.4 `POST /api/v1/requests/absence`
 
+> **Реализовано 14 ноября**, формат зафиксирован в §3.11.
+
+
+
 Создаёт заявку по подтверждённому preview. **Скоуп:** `absence:self:write`.
 
 **Запрос**
@@ -737,6 +1021,10 @@ GET /api/v1/kb/search?q=доступ+к+jira&limit=10
 - без токена → `401 UNAUTHORIZED`.
 
 ### 10.5 `GET /api/v1/requests` и `GET /api/v1/requests/{id}`
+
+> **Реализовано 14 ноября**, формат зафиксирован в §3.12–3.13.
+
+
 
 **Скоуп:** `request:self` (свои), `*:approve:team` (команды).
 
@@ -775,6 +1063,8 @@ GET /api/v1/kb/search?q=доступ+к+jira&limit=10
 ```
 
 ### 10.6 `POST /api/v1/requests/access/preview` и `POST /api/v1/requests/access`
+
+> **Реализовано 15 ноября**, формат зафиксирован в §3.14–3.15.
 
 Пакет доступов по роли. **Скоуп:** `access:self` / `access:self:write`.
 

@@ -199,6 +199,142 @@ else
     fail "mock-логин vera@demo.local не выдал токен"
 fi
 
+section 'Действия (отгул)'
+
+PREVIEW=$(curl -sS --max-time 10 -X POST "$CORE_URL/api/v1/requests/absence/preview" \
+    "${AUTH[@]}" -H 'Content-Type: application/json' \
+    -d '{"date_from":"2026-11-24","date_to":"2026-11-24","absence_type":"day_off"}')
+
+PREVIEW_TOKEN=$(json_get "d['confirmation_token']" <<<"$PREVIEW")
+PREVIEW_ID=$(json_get "d['preview_id']" <<<"$PREVIEW")
+
+if [ -n "${PREVIEW_TOKEN:-}" ]; then
+    ok "POST /api/v1/requests/absence/preview: черновик и токен подтверждения"
+else
+    fail "preview не вернул токен: $PREVIEW"
+fi
+
+if [ -n "${PREVIEW_TOKEN:-}" ]; then
+    KEY="smoke-$(date +%s)"
+
+    CREATED=$(curl -sS --max-time 10 -X POST "$CORE_URL/api/v1/requests/absence" \
+        "${AUTH[@]}" -H 'Content-Type: application/json' \
+        -d "{\"preview_id\":\"$PREVIEW_ID\",\"confirmation_token\":\"$PREVIEW_TOKEN\",\"idempotency_key\":\"$KEY\"}")
+
+    REQUEST_ID=$(json_get "d['request_id']" <<<"$CREATED")
+    STATUS=$(json_get "d['status']" <<<"$CREATED")
+    EXTERNAL=$(json_get "d['external_id']" <<<"$CREATED")
+
+    if [ -n "${REQUEST_ID:-}" ] && [ "${STATUS:-}" = "pending" ]; then
+        ok "POST /api/v1/requests/absence: заявка создана, статус $STATUS, внешний id $EXTERNAL"
+    else
+        fail "заявка не создана: $CREATED"
+    fi
+
+    REPEAT=$(curl -sS --max-time 10 -X POST "$CORE_URL/api/v1/requests/absence" \
+        "${AUTH[@]}" -H 'Content-Type: application/json' \
+        -d "{\"preview_id\":\"$PREVIEW_ID\",\"confirmation_token\":\"$PREVIEW_TOKEN\",\"idempotency_key\":\"$KEY\"}")
+
+    if [ "$(json_get "d['request_id']" <<<"$REPEAT")" = "$REQUEST_ID" ]; then
+        ok "идемпотентность: повтор с тем же ключом вернул ту же заявку"
+    else
+        fail "идемпотентность нарушена: $REPEAT"
+    fi
+
+    LIST=$(curl -sS --max-time 10 "$CORE_URL/api/v1/requests" "${AUTH[@]}")
+    if [ "$(json_get "len(d['items'])" <<<"$LIST")" -ge 1 ]; then
+        ok "GET /api/v1/requests: заявка сохранилась и видна в списке"
+    else
+        fail "заявка не сохранилась: $LIST"
+    fi
+
+    DETAIL=$(curl -sS --max-time 10 "$CORE_URL/api/v1/requests/$REQUEST_ID" "${AUTH[@]}")
+    if [ "$(json_get "len(d['history'])" <<<"$DETAIL")" -ge 1 ]; then
+        ok "GET /api/v1/requests/{id}: история статусов на месте"
+    else
+        fail "в заявке нет истории: $DETAIL"
+    fi
+fi
+
+code=$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' -X POST "$CORE_URL/api/v1/requests/absence" \
+    "${AUTH[@]}" -H 'Content-Type: application/json' \
+    -d '{"preview_id":"x","confirmation_token":"","idempotency_key":"smoke-empty"}')
+
+if [ "$code" = "401" ]; then
+    ok "создание без токена подтверждения → 401"
+else
+    fail "создание без токена → $code (ожидался 401)"
+fi
+
+section 'Доступы, флаги и аналитика'
+
+ACCESS_PREVIEW=$(curl -sS --max-time 10 -X POST "$CORE_URL/api/v1/requests/access/preview" \
+    "${AUTH[@]}" -H 'Content-Type: application/json' -d '{"bundle":"intern"}')
+
+ACCESS_TOKEN=$(json_get "d['confirmation_token']" <<<"$ACCESS_PREVIEW")
+ACCESS_ID=$(json_get "d['preview_id']" <<<"$ACCESS_PREVIEW")
+ACCESS_COUNT=$(json_get "len(d['items'])" <<<"$ACCESS_PREVIEW")
+
+if [ -n "${ACCESS_TOKEN:-}" ] && [ "${ACCESS_COUNT:-0}" -ge 3 ]; then
+    ok "POST /api/v1/requests/access/preview: пакет из $ACCESS_COUNT доступов"
+else
+    fail "preview пакета доступов не удался: $ACCESS_PREVIEW"
+fi
+
+if [ -n "${ACCESS_TOKEN:-}" ]; then
+    ACCESS_KEY="smoke-access-$(date +%s)"
+
+    ACCESS=$(curl -sS --max-time 10 -X POST "$CORE_URL/api/v1/requests/access" \
+        "${AUTH[@]}" -H 'Content-Type: application/json' \
+        -d "{\"preview_id\":\"$ACCESS_ID\",\"confirmation_token\":\"$ACCESS_TOKEN\",\"idempotency_key\":\"$ACCESS_KEY\"}")
+
+    ACCESS_MADE=$(json_get "len(d['requests'])" <<<"$ACCESS")
+
+    if [ "${ACCESS_MADE:-0}" -ge 3 ]; then
+        ok "POST /api/v1/requests/access: создано $ACCESS_MADE заявки на доступы"
+    else
+        fail "заявки на доступы не созданы: $ACCESS"
+    fi
+fi
+
+MENTOR_TOKEN=$(json_get "d['token']" <<<"$(curl -sS --max-time 10 -X POST "$CORE_URL/api/v1/auth/login" -H 'Content-Type: application/json' -d '{"email":"petr@demo.local"}')")
+
+TOP=$(curl -sS --max-time 10 "$CORE_URL/api/v1/analytics/top-questions" -H "Authorization: Bearer $MENTOR_TOKEN")
+TOP_COUNT=$(json_get "len(d[0] if isinstance(d, list) else d['items'])" <<<"$TOP" 2>/dev/null)
+
+if [ "${TOP_COUNT:-0}" -ge 1 ]; then
+    ok "GET /api/v1/analytics/top-questions: топ вопросов ($TOP_COUNT)"
+else
+    fail "топ вопросов пуст: $TOP"
+fi
+
+GAPS=$(curl -sS --max-time 10 "$CORE_URL/api/v1/analytics/content-gaps" -H "Authorization: Bearer $MENTOR_TOKEN")
+GAP_COUNT=$(json_get "len(d[0] if isinstance(d, list) else d['items'])" <<<"$GAPS" 2>/dev/null)
+
+if [ "${GAP_COUNT:-0}" -ge 1 ]; then
+    ok "GET /api/v1/analytics/content-gaps: найдено $GAP_COUNT дыр в базе знаний"
+else
+    fail "контентные дыры не найдены: $GAPS"
+fi
+
+ADMIN_TOKEN=$(json_get "d['token']" <<<"$(curl -sS --max-time 10 -X POST "$CORE_URL/api/v1/auth/login" -H 'Content-Type: application/json' -d '{"email":"admin@demo.local"}')")
+
+FLAGS=$(curl -sS --max-time 10 "$CORE_URL/api/v1/admin/feature-flags" -H "Authorization: Bearer $ADMIN_TOKEN")
+FLAG_COUNT=$(json_get "len(d)" <<<"$FLAGS")
+
+if [ "${FLAG_COUNT:-0}" -ge 1 ]; then
+    ok "GET /api/v1/admin/feature-flags: флагов в реестре $FLAG_COUNT"
+else
+    fail "флаги не отдались: $FLAGS"
+fi
+
+code=$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "$CORE_URL/api/v1/admin/feature-flags" "${AUTH[@]}")
+if [ "$code" = "403" ]; then
+    ok "стажёр не управляет флагами → 403"
+else
+    fail "стажёр запросил флаги → $code (ожидался 403)"
+fi
+
 section 'Чат (SSE)'
 
 STREAM=$(curl -sS --max-time 15 -N -X POST "$CORE_URL/api/v1/chat/stream" \
