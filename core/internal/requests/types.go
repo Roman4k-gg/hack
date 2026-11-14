@@ -27,10 +27,13 @@ type Person struct {
 
 type Item struct {
 	RequestID  string    `json:"request_id"`
+	ID         string    `json:"id"`
 	Kind       string    `json:"kind"`
+	Type       string    `json:"type"`
 	Title      string    `json:"title"`
 	Status     string    `json:"status"`
 	ExternalID string    `json:"external_id"`
+	Number     string    `json:"number"`
 	Approver   *Person   `json:"approver"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
@@ -49,10 +52,13 @@ type Event struct {
 
 type Detail struct {
 	RequestID  string       `json:"request_id"`
+	ID         string       `json:"id"`
 	Kind       string       `json:"kind"`
+	Type       string       `json:"type"`
 	Title      string       `json:"title"`
 	Status     string       `json:"status"`
 	ExternalID string       `json:"external_id"`
+	Number     string       `json:"number"`
 	Payload    AbsenceDraft `json:"payload"`
 	Approver   *Person      `json:"approver"`
 	NextStep   string       `json:"next_step"`

@@ -185,10 +185,13 @@ func (s *Service) List(ctx context.Context, principal reqctx.Principal) (List, e
 	for _, record := range records {
 		items = append(items, Item{
 			RequestID:  record.ID,
+			ID:         record.ID,
 			Kind:       record.Kind,
+			Type:       record.Kind,
 			Title:      record.Title,
 			Status:     record.Status,
 			ExternalID: record.ExternalID,
+			Number:     record.ExternalID,
 			Approver:   record.Approver,
 			CreatedAt:  record.CreatedAt,
 			UpdatedAt:  record.UpdatedAt,
@@ -227,10 +230,13 @@ func (s *Service) detail(ctx context.Context, principal reqctx.Principal, record
 
 	return Detail{
 		RequestID:  record.ID,
+		ID:         record.ID,
 		Kind:       record.Kind,
+		Type:       record.Kind,
 		Title:      record.Title,
 		Status:     record.Status,
 		ExternalID: record.ExternalID,
+		Number:     record.ExternalID,
 		Payload:    record.Payload,
 		Approver:   record.Approver,
 		NextStep:   nextStepOf(record.Status),
