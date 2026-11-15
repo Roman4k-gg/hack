@@ -27,7 +27,7 @@ export function AppShell() {
     ...(isIntern
       ? [{ to: '/map', label: 'Карта', icon: MapIcon, color: 'bg-brand-soft' }]
       : []),
-    { to: '/', label: 'Чат', icon: MessageCircle, color: 'bg-azure-soft' },
+    { to: '/chat', label: 'Чат', icon: MessageCircle, color: 'bg-azure-soft' },
     {
       to: '/requests',
       label: 'Заявки',
@@ -86,9 +86,9 @@ export function AppShell() {
         </button>
       </aside>
 
-      <main className="flex min-w-0 flex-1 flex-col px-7 py-7">
+      <main className="flex min-w-0 flex-1 flex-col px-4 py-4 sm:px-7 sm:py-7">
         {user && (
-          <header className="mb-5 flex items-baseline justify-between gap-4 border-b border-line pb-3">
+          <header className="mb-5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-line pb-3">
             <p className="text-sm font-bold">{user.full_name}</p>
             <p className="text-xs text-muted">
               {roleLabels[user.role]}

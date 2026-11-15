@@ -1,14 +1,7 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { Chat } from '../features/chat/Chat';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/')({
-  component: ChatPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/chat' });
+  },
 });
-
-function ChatPage() {
-  return (
-    <main style={{ height: '100vh' }}>
-      <Chat />
-    </main>
-  );
-}

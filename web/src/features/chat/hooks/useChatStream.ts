@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createSSEParser } from '../../../lib/sse/parseSSE';
 import type { SSEEvent } from '../../../lib/sse/parseSSE';
@@ -8,7 +7,8 @@ interface ChatStreamOptions {
     body: unknown;
     headers?: Record<string, string>;
     onEvent: (event: SSEEvent) => void;
-    onFailure?: (error: Error) => void;
+    onComplete?: () => void;
+    onFailure?: (error: Error, httpStatus?: number) => void;
 }
 
 type StreamStatus = 'idle' | 'streaming' | 'error';
@@ -30,6 +30,7 @@ export function useChatStream() {
         body,
         headers,
         onEvent,
+        onComplete,
         onFailure,
     }: ChatStreamOptions) => {
         controllerRef.current?.abort();
@@ -39,6 +40,8 @@ export function useChatStream() {
 
         setStatus('streaming');
         setError(null);
+
+        let httpStatus: number | undefined;
 
         try {
             const response = await fetch(url, {
@@ -51,6 +54,8 @@ export function useChatStream() {
                 body: JSON.stringify(body),
                 signal: controller.signal,
             });
+
+            httpStatus = response.status;
 
             if (!response.ok) {
                 throw new Error(statusMessage(response.status));
@@ -82,6 +87,7 @@ export function useChatStream() {
             if (!controller.signal.aborted) {
                 parser.feed(decoder.decode());
                 parser.flush();
+                onComplete?.();
             }
         } catch (err) {
             if (controller.signal.aborted) {
@@ -96,7 +102,7 @@ export function useChatStream() {
 
                 setError(failure.message);
                 setStatus('error');
-                onFailure?.(failure);
+                onFailure?.(failure, httpStatus);
             }
         } finally {
             if (controllerRef.current === controller) {
@@ -131,6 +137,8 @@ function statusMessage(status: number): string {
             return 'Сессия истекла, войдите заново';
         case 429:
             return 'Слишком много запросов, попробуйте позже';
+        case 502:
+            return 'Ассистент ответил с ошибкой';
         case 503:
             return 'Ассистент сейчас недоступен';
         case 504:

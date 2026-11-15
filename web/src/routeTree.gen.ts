@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as AppChatRouteImport } from './routes/_app/chat'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppMapRouteImport } from './routes/_app/map'
 import { Route as AppRequestsRouteImport } from './routes/_app/requests'
@@ -30,6 +31,11 @@ const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AppChatRoute = AppChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
@@ -55,6 +61,7 @@ const AppTeamInternIdRoute = AppTeamInternIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/chat': typeof AppChatRoute
   '/dashboard': typeof AppDashboardRoute
   '/map': typeof AppMapRoute
   '/requests': typeof AppRequestsRoute
@@ -63,6 +70,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/chat': typeof AppChatRoute
   '/dashboard': typeof AppDashboardRoute
   '/map': typeof AppMapRoute
   '/requests': typeof AppRequestsRoute
@@ -73,6 +81,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/_app/chat': typeof AppChatRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/map': typeof AppMapRoute
   '/_app/requests': typeof AppRequestsRoute
@@ -81,14 +90,28 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/login' | '/dashboard' | '/map' | '/requests' | '/team/$internId'
+    | '/'
+    | '/login'
+    | '/chat'
+    | '/dashboard'
+    | '/map'
+    | '/requests'
+    | '/team/$internId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/dashboard' | '/map' | '/requests' | '/team/$internId'
+  to:
+    | '/'
+    | '/login'
+    | '/chat'
+    | '/dashboard'
+    | '/map'
+    | '/requests'
+    | '/team/$internId'
   id:
     | '__root__'
     | '/'
     | '/_app'
     | '/login'
+    | '/_app/chat'
     | '/_app/dashboard'
     | '/_app/map'
     | '/_app/requests'
@@ -124,6 +147,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/chat': {
+      id: '/_app/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof AppChatRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/dashboard': {
       id: '/_app/dashboard'
       path: '/dashboard'
@@ -156,6 +186,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppChatRoute: typeof AppChatRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppMapRoute: typeof AppMapRoute
   AppRequestsRoute: typeof AppRequestsRoute
@@ -163,6 +194,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppChatRoute: AppChatRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppMapRoute: AppMapRoute,
   AppRequestsRoute: AppRequestsRoute,

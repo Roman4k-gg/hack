@@ -33,7 +33,7 @@ COMPOSE_DEV  := $(COMPOSE) $(foreach profile,$(DEV_PROFILES),--profile $(profile
 COMPOSE_DEMO := $(COMPOSE) --profile $(DEMO_PROFILES) $(foreach profile,$(DEV_PROFILES),--profile $(profile))
 
 .PHONY: help up up-dev up-demo up-observability down seed demo-reset logs ps \
-        test test-core test-ai test-web coverage coverage-gate e2e lint fmt smoke \
+        test test-core test-ai test-web coverage coverage-gate e2e e2e-web lint fmt smoke \
         dev-core dev-ai dev-web dev-mcp
 
 help:
@@ -100,6 +100,9 @@ coverage-gate:
 
 e2e:
 	@if [ -f web/playwright.config.ts ]; then cd web && npx playwright test; else echo "e2e: playwright не настроен"; fi
+
+e2e-web:
+	cd web && npx playwright test --reporter=list
 
 smoke:
 	@bash scripts/smoke.sh
