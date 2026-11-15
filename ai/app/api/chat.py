@@ -1,9 +1,11 @@
 import logging
+import re
+import uuid
 from collections.abc import AsyncIterator
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -19,6 +21,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 INTERNAL_ERROR_TEXT = "Что-то пошло не так. Попробуй ещё раз."
+TRACE_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 
 class ChatRequest(BaseModel):
@@ -43,15 +46,26 @@ def get_agent() -> Agent:
         max_iterations=settings.max_tool_iterations,
         prompt_version=settings.prompt_version,
         stream_delay=settings.mock_stream_delay if settings.llm_mode == "mock" else 0.0,
+        llm_retries=settings.llm_retries,
+        llm_retry_delay=settings.llm_retry_delay,
     )
 
 
-async def stream_events(agent: Agent, user: User, message: str) -> AsyncIterator[str]:
+def trace_id_from(*candidates: str | None) -> str:
+    for value in candidates:
+        if value and TRACE_PATTERN.match(value):
+            return value
+    return uuid.uuid4().hex
+
+
+async def stream_events(
+    agent: Agent, user: User, message: str, trace_id: str = ""
+) -> AsyncIterator[str]:
     try:
-        async for event in agent.run(user, message):
+        async for event in agent.run(user, message, trace_id=trace_id):
             yield sse.format_event(event)
     except Exception:
-        logger.exception("chat stream failed")
+        logger.exception("chat stream failed", extra={"fields": {"trace_id": trace_id}})
         yield sse.format_event(sse.error(INTERNAL_ERROR_TEXT))
 
 
@@ -60,9 +74,16 @@ async def chat_stream(
     body: ChatRequest,
     user: Annotated[User, Depends(current_user)],
     agent: Annotated[Agent, Depends(get_agent)],
+    x_request_id: Annotated[str | None, Header()] = None,
+    x_trace_id: Annotated[str | None, Header()] = None,
 ) -> StreamingResponse:
+    trace_id = trace_id_from(x_trace_id, x_request_id)
     return StreamingResponse(
-        stream_events(agent, user, body.message.strip()),
+        stream_events(agent, user, body.message.strip(), trace_id),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "X-Trace-Id": trace_id,
+        },
     )

@@ -119,9 +119,26 @@ async def test_iteration_limit(intern: User):
 
 
 async def test_llm_error_yields_error_event(intern: User):
-    provider = ScriptedProvider([LLMError("down")])
+    provider = ScriptedProvider([LLMError("bad key", retryable=False)])
     events = await collect(Agent(provider, plan_registry()), intern)
     assert events == [{"type": "error", "message": LLM_ERROR_TEXT}]
+    assert len(provider.calls) == 1
+
+
+async def test_retryable_llm_error_is_retried_once(intern: User):
+    provider = ScriptedProvider([LLMError("429"), LLMResponse(text="Готово")])
+    events = await collect(Agent(provider, plan_registry()), intern)
+
+    assert text_of(events) == "Готово"
+    assert len(provider.calls) == 2
+
+
+async def test_llm_error_after_all_retries(intern: User):
+    provider = ScriptedProvider([LLMError("503"), LLMError("503")])
+    events = await collect(Agent(provider, plan_registry(), llm_retries=1), intern)
+
+    assert events == [{"type": "error", "message": LLM_ERROR_TEXT}]
+    assert len(provider.calls) == 2
 
 
 async def test_citations_are_sent_before_done(intern: User):

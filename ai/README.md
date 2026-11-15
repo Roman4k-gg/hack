@@ -38,6 +38,14 @@ uv run uvicorn app.main:app --reload --port 8000
 | `get_my_profile` | `GET /api/v1/me` | — |
 | `get_onboarding_plan` | `GET /api/v1/onboarding/plan` | `onboarding:plan:read` |
 | `search_knowledge` | `GET /api/v1/kb/search` | `kb:read` |
+| `preview_absence_request` | `POST /api/v1/requests/absence/preview` | `absence:self` |
+| `create_absence_request` | `POST /api/v1/requests/absence` | `absence:self:write` |
+| `get_my_requests` | `GET /api/v1/requests` | `request:self` |
+| `preview_access_bundle` | `POST /api/v1/requests/access/preview` | `access:self` |
+| `create_access_requests` | `POST /api/v1/requests/access` | `access:self:write` |
+
+Действия идут в два шага: `preview_*` возвращает черновик, токен подтверждения агент прячет
+от модели. `create_*` выполняется только в следующем сообщении после явного «да».
 
 ## Режимы
 
@@ -47,7 +55,17 @@ uv run uvicorn app.main:app --reload --port 8000
 | `TOOLS_MODE` | `mcp` — инструменты через MCP-сервер, `direct` — напрямую в core | `mcp` |
 
 Остальные переменные — в `app/config.py`: `CORE_URL`, `MCP_URL`, `JWT_SECRET`, `LLM_MODEL`,
-`LLM_API_KEY`, `LLM_BASE_URL`, `MAX_TOOL_ITERATIONS`, `TOOL_TIMEOUT`, `LOG_LEVEL`.
+`LLM_API_KEY`, `LLM_BASE_URL`, `LLM_RETRIES`, `LLM_RETRY_DELAY`, `MAX_TOOL_ITERATIONS`,
+`TOOL_TIMEOUT`, `LOG_LEVEL`, `LOG_JSON`.
+
+## Логи
+
+Логи пишутся в stderr одной JSON-строкой: `ts`, `level`, `service`, `logger`, `message`.
+На каждый запрос чата — запись `agent_run`: `trace_id` (из `X-Trace-Id` / `X-Request-ID`,
+возвращается в ответе), `user_id`, `role`, `prompt_version`, `model`, `status`
+(`ok` / `limit` / `llm_error` / `error` / `cancelled`), `latency_ms`, `tool_iterations`,
+`llm_retries`, токены и `tool_calls` с `latency_ms` и `error_code`. Текст сообщения не пишется.
+Временные ошибки LLM (429, 5xx, таймаут) повторяются `LLM_RETRIES` раз.
 
 ## Проверки
 
