@@ -1,3 +1,4 @@
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -47,9 +48,9 @@ class CoreClient:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             return await client.request(method, url, headers=headers, **kwargs)
 
-    async def get(self, path: str, user: User) -> Any:
+    async def get(self, path: str, user: User, params: dict[str, Any] | None = None) -> Any:
         try:
-            response = await self._request("GET", path, user)
+            response = await self._request("GET", path, user, params=params)
         except httpx.TimeoutException as exc:
             raise ToolError("TIMEOUT", "Сервис не ответил вовремя") from exc
         except httpx.HTTPError as exc:
@@ -59,6 +60,8 @@ class CoreClient:
             raise ToolError("FORBIDDEN", "Недостаточно прав для этого действия")
         if response.status_code == 404:
             raise ToolError("NOT_FOUND", "Данные не найдены")
+        if response.status_code == 400:
+            raise ToolError("VALIDATION_ERROR", "Некорректный запрос")
         if response.status_code >= 400:
             raise ToolError("UPSTREAM_ERROR", f"Сервис вернул ошибку {response.status_code}")
         try:
@@ -92,6 +95,89 @@ async def get_onboarding_plan(user: User, args: dict[str, Any], core: CoreClient
     return ToolResult(ok=True, data=await core.get("/api/v1/onboarding/plan", user))
 
 
+STOP_WORDS = {
+    "как",
+    "где",
+    "что",
+    "это",
+    "мне",
+    "меня",
+    "мой",
+    "моя",
+    "мои",
+    "нужно",
+    "надо",
+    "можно",
+    "получить",
+    "сделать",
+    "такое",
+    "для",
+    "при",
+    "или",
+    "есть",
+    "кто",
+    "куда",
+    "когда",
+    "почему",
+    "зачем",
+    "какой",
+    "какая",
+    "какие",
+    "нас",
+    "вас",
+    "работает",
+    "подскажи",
+    "расскажи",
+    "хочу",
+}
+SEARCH_LIMIT = 3
+
+
+def keywords(query: str, limit: int = 4) -> list[str]:
+    words = re.findall(r"[\w-]+", query.lower())
+    result: list[str] = []
+    for word in words:
+        if len(word) >= 3 and word not in STOP_WORDS and word not in result:
+            result.append(word)
+    return result[:limit]
+
+
+def search_item(raw: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "document_id": str(raw.get("document_id", "")),
+        "title": raw.get("title", ""),
+        "summary": raw.get("summary", ""),
+        "url": raw.get("url", ""),
+        "chunk": raw.get("chunk", ""),
+        "updated_at": raw.get("updated_at", ""),
+        "stale": bool(raw.get("stale", False)),
+        "score": float(raw.get("score", 0) or 0),
+    }
+
+
+async def search_knowledge(user: User, args: dict[str, Any], core: CoreClient) -> ToolResult:
+    query = str(args.get("query") or "").strip()
+    if not query:
+        raise ToolError("VALIDATION_ERROR", "Пустой поисковый запрос")
+
+    found: dict[str, dict[str, Any]] = {}
+    for term in [query, *keywords(query)]:
+        response = await core.get("/api/v1/kb/search", user, params={"q": term, "limit": 5})
+        for raw in response.get("items") or []:
+            item = search_item(raw)
+            current = found.get(item["document_id"])
+            if current is None or item["score"] > current["score"]:
+                found[item["document_id"]] = item
+        if found and term == query:
+            break
+
+    items = sorted(found.values(), key=lambda item: item["score"], reverse=True)[:SEARCH_LIMIT]
+    citations = [
+        {"id": item["document_id"], "title": item["title"], "url": item["url"]} for item in items
+    ]
+    return ToolResult(ok=True, data={"query": query, "items": items}, citations=citations)
+
+
 DEFAULT_TOOLS = [
     Tool(
         spec=ToolSpec(
@@ -112,6 +198,26 @@ DEFAULT_TOOLS = [
         ),
         handler=get_onboarding_plan,
         scope="onboarding:plan:read",
+    ),
+    Tool(
+        spec=ToolSpec(
+            name="search_knowledge",
+            description=(
+                "Поиск по базе знаний команды: доступы, инструменты, процессы, отгулы. "
+                "Возвращает документы с цитатой, ссылкой и датой обновления. "
+                "В query передавай короткий запрос из ключевых слов, например «доступ Jira»."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "minLength": 1, "maxLength": 200},
+                },
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+        ),
+        handler=search_knowledge,
+        scope="kb:read",
     ),
 ]
 
