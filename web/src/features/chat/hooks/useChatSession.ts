@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuthStore } from '@/features/auth/authStore';
 import { useChatStore } from '../chatStore';
 import { parseChatEvent } from '../schemas';
@@ -11,9 +11,16 @@ export type ChatMode = 'live' | 'demo';
 
 export function useChatSession() {
   const token = useAuthStore((state) => state.token);
+  const userId = useAuthStore((state) => state.user?.id ?? null);
   const { start, stop: stopStream, error: streamError } = useChatStream();
   const mock = useMockChat();
   const [mode, setMode] = useState<ChatMode>('live');
+
+  useEffect(() => {
+    return () => {
+      stopStream();
+    };
+  }, [userId, stopStream]);
 
   const send = useCallback(
     (content: string) => {

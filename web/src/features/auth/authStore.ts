@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { useChatStore } from '@/features/chat/chatStore';
 import type { LoginResponse, User } from './types';
 
 type AuthState = {
@@ -14,9 +15,14 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       token: null,
       user: null,
-      setSession: (session) =>
-        set({ token: session.token, user: session.user }),
-      logout: () => set({ token: null, user: null }),
+      setSession: (session) => {
+        useChatStore.getState().reset();
+        set({ token: session.token, user: session.user });
+      },
+      logout: () => {
+        useChatStore.getState().reset();
+        set({ token: null, user: null });
+      },
     }),
     { name: 'ai-buddy-auth' },
   ),
