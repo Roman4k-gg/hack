@@ -158,14 +158,30 @@ STOP_WORDS = {
     "хочу",
 }
 SEARCH_LIMIT = 3
+ENDINGS_TEXT = (
+    "ами ями ого его ому ему ыми ими ах ях ам ям ов ев ей ой ий ый ая яя ое ее ые ие ом ем "
+    "ую юю а я ы и у ю е о"
+)
+ENDINGS = tuple(sorted(ENDINGS_TEXT.split(), key=len, reverse=True))
+CYRILLIC = re.compile(r"^[а-яё-]+$")
+
+
+def stem(word: str) -> str:
+    if len(word) < 5 or not CYRILLIC.match(word):
+        return word
+    for ending in ENDINGS:
+        if word.endswith(ending) and len(word) - len(ending) >= 4:
+            return word[: -len(ending)]
+    return word
 
 
 def keywords(query: str, limit: int = 4) -> list[str]:
     words = re.findall(r"[\w-]+", query.lower())
     result: list[str] = []
     for word in words:
-        if len(word) >= 3 and word not in STOP_WORDS and word not in result:
-            result.append(word)
+        term = stem(word)
+        if len(word) >= 3 and word not in STOP_WORDS and term not in result:
+            result.append(term)
     return result[:limit]
 
 
@@ -188,17 +204,21 @@ async def search_knowledge(user: User, args: dict[str, Any], core: CoreClient) -
         raise ToolError("VALIDATION_ERROR", "Пустой поисковый запрос")
 
     found: dict[str, dict[str, Any]] = {}
+    relevance: dict[str, float] = {}
     for term in [query, *keywords(query)]:
         response = await core.get("/api/v1/kb/search", user, params={"q": term, "limit": 5})
         for raw in response.get("items") or []:
             item = search_item(raw)
-            current = found.get(item["document_id"])
+            document_id = item["document_id"]
+            current = found.get(document_id)
             if current is None or item["score"] > current["score"]:
-                found[item["document_id"]] = item
+                found[document_id] = item
+            relevance[document_id] = relevance.get(document_id, 0.0) + item["score"]
         if found and term == query:
             break
 
-    items = sorted(found.values(), key=lambda item: item["score"], reverse=True)[:SEARCH_LIMIT]
+    ranked = sorted(found.values(), key=lambda item: relevance[item["document_id"]], reverse=True)
+    items = ranked[:SEARCH_LIMIT]
     citations = [
         {"id": item["document_id"], "title": item["title"], "url": item["url"]} for item in items
     ]

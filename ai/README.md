@@ -67,6 +67,21 @@ uv run uvicorn app.main:app --reload --port 8000
 `llm_retries`, токены и `tool_calls` с `latency_ms` и `error_code`. Текст сообщения не пишется.
 Временные ошибки LLM (429, 5xx, таймаут) повторяются `LLM_RETRIES` раз.
 
+## Evals
+
+`evals/golden.jsonl` — эталонные вопросы: база знаний, ACL по ролям, «не знаю», план, профиль,
+действия с подтверждением. Каждый кейс задаёт, какие инструменты и с какими аргументами
+должны вызваться, какие документы обязаны или не имеют права попасть в цитаты и что должно
+или не должно быть в ответе. Core подменяется `evals/fake_core.py` — копия seed-документов
+и правил видимости core.
+
+```bash
+uv run python -m evals.run
+uv run python -m evals.run --mode real --min-pass 0.8
+```
+
+Отчёт пишется в `evals/report.md`. В CI golden set прогоняется в mock-режиме внутри pytest.
+
 ## Проверки
 
 ```bash
