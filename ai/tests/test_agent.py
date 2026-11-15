@@ -63,6 +63,7 @@ async def test_plain_answer_streams_text_and_done(intern: User):
     assert [tool.name for tool in provider.calls[0]["tools"]] == [
         "get_my_profile",
         "get_onboarding_plan",
+        "search_knowledge",
     ]
 
 
