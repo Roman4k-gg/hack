@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from app.agent.tools import CoreClient, ToolRegistry, keywords
+from app.agent.tools import CoreClient, ToolRegistry, keywords, stem
 from app.auth import User
 
 JIRA = {
@@ -35,9 +35,29 @@ def test_keywords_drop_stop_words_and_short_words():
     assert keywords("что такое экватор и как к нему готовиться") == [
         "экватор",
         "нему",
-        "готовиться",
+        "готовитьс",
     ]
     assert keywords("a b c d e f g h", limit=2) == []
+    assert keywords("Как устроены релизы и релиз?") == ["устроен", "релиз"]
+
+
+def test_stem_cuts_russian_endings_only():
+    assert stem("отпуска") == "отпуск"
+    assert stem("правила") == "правил"
+    assert stem("стажёра") == "стажёр"
+    assert stem("дейлик") == "дейлик"
+    assert stem("дней") == "дней"
+    assert stem("jira") == "jira"
+    assert stem("первый") == "перв"
+
+
+async def test_search_ranks_documents_matching_more_keywords(intern: User):
+    many = {**VPN, "document_id": "many", "score": 0.7}
+    registry = registry_for({"отпуск": [many, JIRA], "дней": [many]})
+
+    result = await registry.call("search_knowledge", {"query": "отпуска дней"}, intern)
+
+    assert [item["document_id"] for item in result.data["items"]] == ["many", JIRA["document_id"]]
 
 
 async def test_search_uses_full_query_first(intern: User):

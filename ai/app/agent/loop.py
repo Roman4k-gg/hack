@@ -2,7 +2,8 @@ import asyncio
 import json
 import re
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
+from datetime import date
 from typing import Any
 
 from app import sse
@@ -62,6 +63,7 @@ class Agent:
         pending: PendingStore | None = None,
         llm_retries: int = 1,
         llm_retry_delay: float = 0.0,
+        today: Callable[[], date] = date.today,
     ) -> None:
         self.provider = provider
         self.registry = registry
@@ -71,6 +73,7 @@ class Agent:
         self.pending = pending or PendingStore()
         self.llm_retries = llm_retries
         self.llm_retry_delay = llm_retry_delay
+        self.today = today
 
     async def _complete(
         self, messages: list[dict[str, Any]], specs: list[ToolSpec], run: AgentRun
@@ -158,7 +161,12 @@ class Agent:
         specs = [tool.spec for tool in tools.values()]
         turn_id = uuid.uuid4().hex
         messages: list[dict[str, Any]] = [
-            build_system_message(user, self.prompt_version, extra=self._pending_context(user)),
+            build_system_message(
+                user,
+                self.prompt_version,
+                today=self.today(),
+                extra=self._pending_context(user),
+            ),
             {"role": "user", "content": message},
         ]
         citations: dict[str, dict[str, str]] = {}
