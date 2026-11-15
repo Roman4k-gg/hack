@@ -8,9 +8,10 @@ from typing import Any
 from app import sse
 from app.agent.pending import HIDDEN_FIELDS, PendingStore
 from app.agent.prompts import build_system_message
+from app.agent.run_log import AgentRun
 from app.agent.tools import Tool, ToolBackend, ToolResult
 from app.auth import User
-from app.providers.base import LLMError, LLMProvider, ToolCall
+from app.providers.base import LLMError, LLMProvider, LLMResponse, ToolCall, ToolSpec
 
 LIMIT_TEXT = (
     "Не получилось собрать ответ за отведённое число шагов. "
@@ -59,6 +60,8 @@ class Agent:
         prompt_version: str = "v1",
         stream_delay: float = 0.0,
         pending: PendingStore | None = None,
+        llm_retries: int = 1,
+        llm_retry_delay: float = 0.0,
     ) -> None:
         self.provider = provider
         self.registry = registry
@@ -66,6 +69,25 @@ class Agent:
         self.prompt_version = prompt_version
         self.stream_delay = stream_delay
         self.pending = pending or PendingStore()
+        self.llm_retries = llm_retries
+        self.llm_retry_delay = llm_retry_delay
+
+    async def _complete(
+        self, messages: list[dict[str, Any]], specs: list[ToolSpec], run: AgentRun
+    ) -> LLMResponse:
+        attempt = 0
+        while True:
+            try:
+                response = await self.provider.complete(messages, specs)
+            except LLMError as exc:
+                if not exc.retryable or attempt >= self.llm_retries:
+                    raise
+                attempt += 1
+                run.llm_retries += 1
+                await asyncio.sleep(self.llm_retry_delay * attempt)
+                continue
+            run.add_response(response)
+            return response
 
     def _pending_context(self, user: User) -> list[str]:
         action = self.pending.get(user.id)
@@ -112,7 +134,26 @@ class Agent:
             if self.stream_delay:
                 await asyncio.sleep(self.stream_delay)
 
-    async def run(self, user: User, message: str) -> AsyncIterator[dict[str, Any]]:
+    async def run(
+        self, user: User, message: str, trace_id: str = ""
+    ) -> AsyncIterator[dict[str, Any]]:
+        run = AgentRun(
+            trace_id=trace_id or uuid.uuid4().hex,
+            user_id=user.id,
+            role=user.role,
+            prompt_version=self.prompt_version,
+            message_length=len(message),
+        )
+        try:
+            async for event in self._run(user, message, run):
+                yield event
+        except Exception as exc:
+            run.finish("error", type(exc).__name__)
+            raise
+        finally:
+            run.log()
+
+    async def _run(self, user: User, message: str, run: AgentRun) -> AsyncIterator[dict[str, Any]]:
         tools = {tool.name: tool for tool in self.registry.available(user)}
         specs = [tool.spec for tool in tools.values()]
         turn_id = uuid.uuid4().hex
@@ -125,8 +166,9 @@ class Agent:
 
         for _ in range(self.max_iterations):
             try:
-                response = await self.provider.complete(messages, specs)
-            except LLMError:
+                response = await self._complete(messages, specs, run)
+            except LLMError as exc:
+                run.finish("llm_error", str(exc))
                 yield sse.error(LLM_ERROR_TEXT)
                 return
 
@@ -135,6 +177,7 @@ class Agent:
                     yield event
                 for item in citations.values():
                     yield sse.citation(item["id"], item["title"], item.get("url", ""))
+                run.finish("ok")
                 yield sse.done()
                 return
 
@@ -146,7 +189,9 @@ class Agent:
 
             for call_id, call in calls:
                 yield sse.tool_call(call_id, call.name, "running")
+                started = run.clock()
                 result = await self._call_tool(call, user, tools, turn_id)
+                run.add_tool(call.name, result.ok, result.error_code, started)
                 yield sse.tool_call(call_id, call.name, "success" if result.ok else "error")
                 for item in result.citations:
                     citations[item["id"]] = item
@@ -160,4 +205,5 @@ class Agent:
 
         async for event in self._stream_text(LIMIT_TEXT):
             yield event
+        run.finish("limit")
         yield sse.done()

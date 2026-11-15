@@ -75,7 +75,7 @@ def test_chat_rejects_empty_message(client: TestClient):
 
 def test_chat_unexpected_error_becomes_error_event(client: TestClient):
     class Broken:
-        async def run(self, user, message):
+        async def run(self, user, message, trace_id=""):
             raise RuntimeError("boom")
             yield
 
