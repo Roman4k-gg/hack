@@ -22,6 +22,12 @@ export function useChatSession() {
 
     if (!text || store.activeMessageId) return;
 
+    if (import.meta.env.VITE_CHAT_DEMO === 'true') {
+      setMode('demo');
+      mock.send(text);
+      return;
+    }
+
     setMode('live');
     store.sendMessage(text);
 
