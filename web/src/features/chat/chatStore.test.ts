@@ -158,3 +158,33 @@ describe('chatStore', () => {
         expect(useChatStore.getState().error).toBeNull();
     });
 });
+describe('сброс истории при смене пользователя', () => {
+    it('очищает сообщения и статус', () => {
+        useChatStore.getState().sendMessage('Где взять доступ к Jira?');
+        useChatStore.getState().applyEvent({
+            type: 'delta',
+            text: 'Спроси наставника',
+        });
+
+        expect(useChatStore.getState().messages.length).toBeGreaterThan(0);
+
+        useChatStore.getState().reset();
+
+        const state = useChatStore.getState();
+
+        expect(state.messages).toEqual([]);
+        expect(state.status).toBe('idle');
+        expect(state.error).toBeNull();
+        expect(state.activeMessageId).toBeNull();
+    });
+
+    it('сбрасывает и ошибку стрима', () => {
+        useChatStore.getState().fail('Ассистент недоступен');
+        expect(useChatStore.getState().status).toBe('error');
+
+        useChatStore.getState().reset();
+
+        expect(useChatStore.getState().status).toBe('idle');
+        expect(useChatStore.getState().error).toBeNull();
+    });
+});

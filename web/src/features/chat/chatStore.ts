@@ -13,6 +13,7 @@ interface ChatState {
     applyEvent: (event: ChatEvent) => void;
     fail: (message: string) => void;
     finish: () => void;
+    reset: () => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -110,6 +111,13 @@ export const useChatStore = create<ChatState>((set) => ({
 
     finish: () => set({
         status: 'idle',
+        activeMessageId: null,
+    }),
+
+    reset: () => set({
+        messages: [],
+        status: 'idle',
+        error: null,
         activeMessageId: null,
     }),
 }));

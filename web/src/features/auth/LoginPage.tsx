@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from '@tanstack/react-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { login } from './api';
 import { useAuthStore } from './authStore';
 import { demoUsers } from './demoUsers';
@@ -7,6 +8,7 @@ import { roleLabels } from './types';
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const setSession = useAuthStore((state) => state.setSession);
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
@@ -19,6 +21,7 @@ export function LoginPage() {
     try {
       const session = await login(value);
       setSession(session);
+      queryClient.clear();
 
       const home = session.user.role === 'intern' ? '/map' : '/dashboard';
       await navigate({ to: home });
