@@ -15,6 +15,7 @@ type fakePlanStore struct {
 	plan      Plan
 	items     map[string]Item
 	updateErr error
+	updates   int
 }
 
 func newFakePlanStore() *fakePlanStore {
@@ -48,6 +49,7 @@ func (s *fakePlanStore) UpdateItemStatus(_ context.Context, itemID, status, bloc
 	if s.updateErr != nil {
 		return Item{}, s.updateErr
 	}
+	s.updates++
 	item, ok := s.items[itemID]
 	if !ok {
 		return Item{}, ErrItemNotFound

@@ -61,6 +61,15 @@ jobs:
     name: Go · core с PostgreSQL
     runs-on: ubuntu-latest
     services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - '6379:6379'
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
       postgres:
         image: pgvector/pgvector:pg16
         env:
@@ -79,6 +88,7 @@ jobs:
         working-directory: core
     env:
       POSTGRES_TEST_DSN: postgres://buddy:buddy@localhost:5432/buddy?sslmode=disable
+      REDIS_TEST_ADDR: 127.0.0.1:6379
     steps:
       - uses: actions/checkout@v4
 
@@ -88,7 +98,17 @@ jobs:
           cache-dependency-path: core/go.sum
 
       - name: Test with database
-        run: go test ./... -race
+        run: go test ./... -race -coverprofile=coverage.out -covermode=atomic
+
+      - name: Coverage gate
+        run: bash ../scripts/coverage-gate.sh core/coverage.out
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-coverage
+          path: core/coverage.out
+          if-no-files-found: error
 
   docker:
     name: Docker · сборка образов
@@ -98,6 +118,12 @@ jobs:
 
       - name: Build core image
         run: docker compose build core
+
+      - name: Build web image
+        run: docker compose build web
+
+      - name: Build ai image
+        run: docker compose build ai
 
   detect:
     name: Detect layers
@@ -171,6 +197,16 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Test with coverage
+        run: npm run test -- --coverage
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-coverage
+          path: web/coverage
+          if-no-files-found: ignore
 
       - name: Build
         run: npm run build
