@@ -1,7 +1,7 @@
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
 
 import httpx
 
@@ -220,6 +220,12 @@ DEFAULT_TOOLS = [
         scope="kb:read",
     ),
 ]
+
+
+class ToolBackend(Protocol):
+    def available(self, user: User) -> list[Tool]: ...
+
+    async def call(self, name: str, args: dict[str, Any], user: User) -> ToolResult: ...
 
 
 class ToolRegistry:

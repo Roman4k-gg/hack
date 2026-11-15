@@ -6,7 +6,7 @@ from typing import Any
 
 from app import sse
 from app.agent.prompts import build_system_message
-from app.agent.tools import ToolRegistry
+from app.agent.tools import ToolBackend
 from app.auth import User
 from app.providers.base import LLMError, LLMProvider, ToolCall
 
@@ -47,7 +47,7 @@ class Agent:
     def __init__(
         self,
         provider: LLMProvider,
-        registry: ToolRegistry,
+        registry: ToolBackend,
         max_iterations: int = 5,
         prompt_version: str = "v1",
         stream_delay: float = 0.0,
