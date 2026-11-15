@@ -87,6 +87,11 @@ async def test_tools_filtered_by_scope():
         "get_my_profile",
         "get_onboarding_plan",
         "search_knowledge",
+        "preview_absence_request",
+        "create_absence_request",
+        "get_my_requests",
+        "preview_access_bundle",
+        "create_access_requests",
     }
     result = await registry.call("get_onboarding_plan", {}, no_plan)
     assert result.error_code == "FORBIDDEN"

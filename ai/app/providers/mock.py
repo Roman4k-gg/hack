@@ -1,7 +1,10 @@
 import json
+import re
+from datetime import date
 from typing import Any
 
 from app.providers.base import LLMResponse, ToolCall, ToolSpec
+from app.providers.mock_dates import absence_type, find_dates, today_from_system
 
 GREETING_TEXT = (
     "Привет! Я AI-buddy — помогаю стажёрам в первые недели. "
@@ -32,6 +35,54 @@ PLAN_WORDS = (
 )
 PROFILE_WORDS = ("кто я", "профил", "обо мне", "моя команда", "мой наставник", "моя роль")
 GREETING_WORDS = ("привет", "здравствуй", "добрый день", "добрый вечер", "доброе утро", "hello")
+REQUEST_WORDS = ("мои заявк", "статус заяв", "что с заявк", "где заявк", "мою заявку", "моей заявк")
+ACCESS_WORDS = (
+    "доступы",
+    "пакет доступ",
+    "оформи доступ",
+    "запроси доступ",
+    "заявку на доступ",
+    "заявки на доступ",
+    "выдать доступ",
+)
+ABSENCE_WORDS = ("отгул", "отпуск", "больничн", "выходной", "отсутств", "не выйду", "заболел")
+HOW_WORDS = ("как ", "правил", "политик", "порядок", "сколько", "можно ли")
+CONFIRM_WORDS = {
+    "да",
+    "подтверждаю",
+    "подтвердить",
+    "подтверждаем",
+    "отправляй",
+    "отправить",
+    "ок",
+    "окей",
+    "давай",
+    "согласен",
+    "согласна",
+    "верно",
+}
+DECLINE_WORDS = ("нет", "отмен", "не надо", "передумал", "стоп")
+PENDING_PATTERN = re.compile(r"Инструмент для подтверждения: (\w+)")
+
+ASK_DATE_TEXT = (
+    "На какую дату оформить? Напиши, например: «отгул в пятницу», "
+    "«отгул 20.11» или «отпуск с 20 по 24 ноября»."
+)
+DECLINED_TEXT = "Хорошо, заявку не отправляю. Если передумаешь — просто напиши даты ещё раз."
+CONFIRMATION_TEXT = (
+    "Сначала покажу черновик заявки, а отправлю только после твоего подтверждения. "
+    "Напиши ещё раз, что нужно оформить: отгул с датами или пакет доступов."
+)
+ABSENCE_LABELS = {"vacation": "Отпуск", "day_off": "Отгул", "sick_leave": "Больничный"}
+STATUS_LABELS = {
+    "draft": "черновик",
+    "pending": "на согласовании",
+    "approved": "согласована",
+    "rejected": "отклонена",
+    "completed": "выполнена",
+    "failed": "ошибка",
+    "cancelled": "отменена",
+}
 
 
 def _last_user_index(messages: list[dict[str, Any]]) -> int:
@@ -120,22 +171,139 @@ def _search_text(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _ru_date(value: Any) -> str:
+    try:
+        return date.fromisoformat(str(value)[:10]).strftime("%d.%m.%Y")
+    except ValueError:
+        return str(value)
+
+
+def _preview_text(preview: dict[str, Any]) -> str:
+    draft = preview.get("draft") or {}
+    date_from, date_to = draft.get("date_from"), draft.get("date_to")
+    dates = _ru_date(date_from)
+    if date_to and date_to != date_from:
+        dates = f"{dates} – {_ru_date(date_to)}"
+    kind = ABSENCE_LABELS.get(str(draft.get("absence_type")), "Отсутствие")
+    lines = ["Подготовил черновик заявки:", f"- **Тип:** {kind}", f"- **Даты:** {dates}"]
+    if draft.get("comment"):
+        lines.append(f"- **Комментарий:** {draft['comment']}")
+    notes = preview.get("policy_notes") or []
+    if notes:
+        lines.append("\nПравила:")
+        lines.extend(f"- {note}" for note in notes)
+    lines.append("\nОтправить заявку? Напиши «подтверждаю» — или «нет», если передумал.")
+    return "\n".join(lines)
+
+
+def _created_text(request: dict[str, Any]) -> str:
+    status = STATUS_LABELS.get(str(request.get("status")), str(request.get("status", "")))
+    lines = ["Заявка отправлена ✅"]
+    if request.get("external_id"):
+        lines.append(f"- **Номер:** {request['external_id']}")
+    lines.append(f"- **Статус:** {status}")
+    approver = (request.get("approver") or {}).get("full_name")
+    if approver:
+        lines.append(f"- **Согласует:** {approver}")
+    if request.get("next_step"):
+        lines.append(f"\n{request['next_step']}")
+    return "\n".join(lines)
+
+
+def _access_preview_text(preview: dict[str, Any]) -> str:
+    items = preview.get("items") or []
+    if not items:
+        return "Для твоей роли нет доступов, которые нужно запрашивать."
+    lines = ["Подготовил пакет доступов:"]
+    for item in items:
+        approver = f" (согласует {item['approver']})" if item.get("approver") else ""
+        reason = f" — {item['reason']}" if item.get("reason") else ""
+        lines.append(f"- **{item.get('system', '')}**{reason}{approver}")
+    lines.append("\nОтправить заявки? Напиши «подтверждаю» — или «нет», если не нужно.")
+    return "\n".join(lines)
+
+
+def _access_created_text(result: dict[str, Any]) -> str:
+    lines = ["Заявки на доступы отправлены ✅"]
+    for item in result.get("requests") or []:
+        status = STATUS_LABELS.get(str(item.get("status")), str(item.get("status", "")))
+        number = f" ({item['external_id']})" if item.get("external_id") else ""
+        lines.append(f"- {item.get('system', '')} — {status}{number}")
+    if result.get("next_step"):
+        lines.append(f"\n{result['next_step']}")
+    return "\n".join(lines)
+
+
+def _requests_text(result: dict[str, Any]) -> str:
+    items = result.get("items") or []
+    if not items:
+        return "У тебя пока нет заявок."
+    lines = ["Твои заявки:"]
+    for item in items:
+        status = STATUS_LABELS.get(str(item.get("status")), str(item.get("status", "")))
+        number = f" ({item['external_id']})" if item.get("external_id") else ""
+        approver = f", согласует {item['approver']}" if item.get("approver") else ""
+        lines.append(f"- {item.get('title', 'Заявка')} — {status}{number}{approver}")
+    return "\n".join(lines)
+
+
+def _error_text(error: dict[str, Any]) -> str:
+    code = error.get("code")
+    if code == "FORBIDDEN":
+        return FORBIDDEN_TEXT
+    if code == "CONFIRMATION_REQUIRED":
+        return CONFIRMATION_TEXT
+    if code == "VALIDATION_ERROR":
+        return f"Не получилось: {error.get('message') or 'проверь данные'}."
+    return TOOL_ERROR_TEXT
+
+
 def _answer_from_tool(name: str, payload: dict[str, Any]) -> str:
     if not payload.get("ok"):
-        code = (payload.get("error") or {}).get("code")
-        return FORBIDDEN_TEXT if code == "FORBIDDEN" else TOOL_ERROR_TEXT
+        return _error_text(payload.get("error") or {})
     result = payload.get("result") or {}
-    if name == "get_onboarding_plan":
-        return _plan_text(result)
-    if name == "get_my_profile":
-        return _profile_text(result)
-    if name == "search_knowledge":
-        return _search_text(result)
-    return FALLBACK_TEXT
+    builders = {
+        "get_onboarding_plan": _plan_text,
+        "get_my_profile": _profile_text,
+        "search_knowledge": _search_text,
+        "preview_absence_request": _preview_text,
+        "create_absence_request": _created_text,
+        "get_my_requests": _requests_text,
+        "preview_access_bundle": _access_preview_text,
+        "create_access_requests": _access_created_text,
+    }
+    builder = builders.get(name)
+    return builder(result) if builder else FALLBACK_TEXT
+
+
+def _pending_tool(messages: list[dict[str, Any]]) -> str:
+    for message in messages:
+        if message.get("role") == "system":
+            match = PENDING_PATTERN.search(str(message.get("content") or ""))
+            if match:
+                return match.group(1)
+    return ""
 
 
 class MockProvider:
     name = "mock"
+
+    @staticmethod
+    def _absence(question: str, messages: list[dict[str, Any]], call: Any) -> LLMResponse | None:
+        dates = find_dates(question, today_from_system(messages))
+        if dates:
+            return call(
+                "preview_absence_request",
+                {
+                    "date_from": dates[0].isoformat(),
+                    "date_to": dates[-1].isoformat(),
+                    "absence_type": absence_type(question),
+                    "comment": "",
+                },
+            )
+        if _contains(question.lower() + " ", HOW_WORDS):
+            return call("search_knowledge", {"query": question})
+        return LLMResponse(text=ASK_DATE_TEXT, model="mock")
 
     async def complete(self, messages: list[dict[str, Any]], tools: list[ToolSpec]) -> LLMResponse:
         user_index = _last_user_index(messages)
@@ -156,8 +324,20 @@ class MockProvider:
                 return None
             return LLMResponse(tool_calls=[ToolCall(id="", name=name, arguments=arguments or {})])
 
-        if _contains(lowered, PROFILE_WORDS):
+        words = set(re.findall(r"[a-zа-яё]+", lowered))
+        pending_tool = _pending_tool(messages)
+        if pending_tool and words & CONFIRM_WORDS and not _contains(lowered, DECLINE_WORDS):
+            response = call(pending_tool)
+        elif pending_tool and _contains(lowered, DECLINE_WORDS):
+            return LLMResponse(text=DECLINED_TEXT, model="mock")
+        elif _contains(lowered, PROFILE_WORDS):
             response = call("get_my_profile")
+        elif _contains(lowered, REQUEST_WORDS):
+            response = call("get_my_requests")
+        elif _contains(lowered, ACCESS_WORDS):
+            response = call("preview_access_bundle", {"bundle": "intern"})
+        elif _contains(lowered, ABSENCE_WORDS):
+            response = self._absence(question, messages, call)
         elif _contains(lowered, PLAN_WORDS):
             response = call("get_onboarding_plan")
         elif _contains(lowered, GREETING_WORDS) and len(lowered.split()) <= 4:

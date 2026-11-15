@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.openai.com/v1"
     llm_timeout: float = 30.0
 
+    tools_mode: str = "mcp"
+    mcp_url: str = "http://localhost:8001/mcp"
+    mcp_host: str = "0.0.0.0"
+    mcp_port: int = 8001
+
     max_tool_iterations: int = 5
     tool_timeout: float = 5.0
     mock_stream_delay: float = 0.03
