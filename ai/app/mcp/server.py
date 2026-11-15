@@ -19,6 +19,28 @@ READ_ONLY = ToolAnnotations(
     idempotent_hint=True,
     open_world_hint=False,
 )
+PREVIEW = ToolAnnotations(
+    read_only_hint=True,
+    destructive_hint=False,
+    idempotent_hint=False,
+    open_world_hint=False,
+)
+WRITE = ToolAnnotations(
+    read_only_hint=False,
+    destructive_hint=False,
+    idempotent_hint=True,
+    open_world_hint=True,
+)
+CREATE_DESCRIPTION = (
+    "Отправить заявку на отсутствие по подтверждённому черновику. "
+    "Нужны preview_id и confirmation_token из preview_absence_request и idempotency_key. "
+    "Вызывать только после явного согласия пользователя."
+)
+CREATE_ACCESS_DESCRIPTION = (
+    "Отправить заявки на доступы по подтверждённому черновику пакета. "
+    "Нужны preview_id и confirmation_token из preview_access_bundle и idempotency_key. "
+    "Вызывать только после явного согласия пользователя."
+)
 INSTRUCTIONS = (
     "Инструменты AI-buddy для стажёров Авито. Каждый вызов выполняется с JWT пользователя "
     "из заголовка Authorization и строго в его правах."
@@ -90,6 +112,73 @@ def build_server(
     )
     async def search_knowledge(query: str, ctx: Context) -> dict[str, Any]:
         return await handle(registry, settings, "search_knowledge", {"query": query}, ctx.headers)
+
+    @server.tool(
+        name="preview_absence_request",
+        description=descriptions["preview_absence_request"],
+        annotations=PREVIEW,
+    )
+    async def preview_absence_request(
+        date_from: str,
+        ctx: Context,
+        date_to: str = "",
+        absence_type: str = "day_off",
+        comment: str = "",
+    ) -> dict[str, Any]:
+        args = {
+            "date_from": date_from,
+            "date_to": date_to,
+            "absence_type": absence_type,
+            "comment": comment,
+        }
+        return await handle(registry, settings, "preview_absence_request", args, ctx.headers)
+
+    @server.tool(
+        name="create_absence_request",
+        description=CREATE_DESCRIPTION,
+        annotations=WRITE,
+    )
+    async def create_absence_request(
+        preview_id: str, confirmation_token: str, idempotency_key: str, ctx: Context
+    ) -> dict[str, Any]:
+        args = {
+            "preview_id": preview_id,
+            "confirmation_token": confirmation_token,
+            "idempotency_key": idempotency_key,
+        }
+        return await handle(registry, settings, "create_absence_request", args, ctx.headers)
+
+    @server.tool(
+        name="preview_access_bundle",
+        description=descriptions["preview_access_bundle"],
+        annotations=PREVIEW,
+    )
+    async def preview_access_bundle(ctx: Context, bundle: str = "intern") -> dict[str, Any]:
+        args = {"bundle": bundle}
+        return await handle(registry, settings, "preview_access_bundle", args, ctx.headers)
+
+    @server.tool(
+        name="create_access_requests",
+        description=CREATE_ACCESS_DESCRIPTION,
+        annotations=WRITE,
+    )
+    async def create_access_requests(
+        preview_id: str, confirmation_token: str, idempotency_key: str, ctx: Context
+    ) -> dict[str, Any]:
+        args = {
+            "preview_id": preview_id,
+            "confirmation_token": confirmation_token,
+            "idempotency_key": idempotency_key,
+        }
+        return await handle(registry, settings, "create_access_requests", args, ctx.headers)
+
+    @server.tool(
+        name="get_my_requests",
+        description=descriptions["get_my_requests"],
+        annotations=READ_ONLY,
+    )
+    async def get_my_requests(ctx: Context) -> dict[str, Any]:
+        return await handle(registry, settings, "get_my_requests", {}, ctx.headers)
 
     @server.custom_route("/healthz", methods=["GET"])
     async def healthz(request: Request) -> JSONResponse:

@@ -80,14 +80,31 @@ async def test_handle_respects_scopes():
     assert result["error"]["code"] == "FORBIDDEN"
 
 
-async def test_server_lists_read_only_tools():
+async def test_server_lists_tools_with_annotations():
     from mcp.client.client import Client
 
     async with Client(build_server(core_registry())) as client:
         tools = {tool.name: tool for tool in (await client.list_tools()).tools}
-        assert set(tools) == {"get_my_profile", "get_onboarding_plan", "search_knowledge"}
-        assert all(tool.annotations.read_only_hint for tool in tools.values())
+        assert set(tools) == {
+            "get_my_profile",
+            "get_onboarding_plan",
+            "search_knowledge",
+            "preview_absence_request",
+            "create_absence_request",
+            "get_my_requests",
+            "preview_access_bundle",
+            "create_access_requests",
+        }
+        writers = {name for name, tool in tools.items() if not tool.annotations.read_only_hint}
+        assert writers == {"create_absence_request", "create_access_requests"}
+        assert "required" not in tools["preview_access_bundle"].input_schema
         assert tools["search_knowledge"].input_schema["required"] == ["query"]
+        assert tools["preview_absence_request"].input_schema["required"] == ["date_from"]
+        assert set(tools["create_absence_request"].input_schema["required"]) == {
+            "preview_id",
+            "confirmation_token",
+            "idempotency_key",
+        }
 
         result = await client.call_tool("get_my_profile", {})
         assert parse_result(result).error_code == "UNAUTHORIZED"

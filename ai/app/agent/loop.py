@@ -1,12 +1,14 @@
 import asyncio
 import json
 import re
+import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
 from app import sse
+from app.agent.pending import HIDDEN_FIELDS, PendingStore
 from app.agent.prompts import build_system_message
-from app.agent.tools import ToolBackend
+from app.agent.tools import Tool, ToolBackend, ToolResult
 from app.auth import User
 from app.providers.base import LLMError, LLMProvider, ToolCall
 
@@ -15,6 +17,11 @@ LIMIT_TEXT = (
     "Попробуй переформулировать вопрос или спроси наставника."
 )
 LLM_ERROR_TEXT = "AI-модель сейчас недоступна. Попробуй ещё раз чуть позже."
+CONFIRMATION_REQUIRED_TEXT = (
+    "Нет подтверждённого черновика. Сначала подготовь черновик и дождись, "
+    "пока пользователь явно подтвердит его в следующем сообщении."
+)
+RETRYABLE_CODES = {"TIMEOUT", "UPSTREAM_ERROR"}
 
 
 def chunk_text(text: str, words_per_chunk: int = 3) -> list[str]:
@@ -51,12 +58,53 @@ class Agent:
         max_iterations: int = 5,
         prompt_version: str = "v1",
         stream_delay: float = 0.0,
+        pending: PendingStore | None = None,
     ) -> None:
         self.provider = provider
         self.registry = registry
         self.max_iterations = max_iterations
         self.prompt_version = prompt_version
         self.stream_delay = stream_delay
+        self.pending = pending or PendingStore()
+
+    def _pending_context(self, user: User) -> list[str]:
+        action = self.pending.get(user.id)
+        if action is None:
+            return []
+        draft = json.dumps(action.draft, ensure_ascii=False)
+        return [
+            f"- Ожидает подтверждения пользователя: {draft}",
+            f"- Инструмент для подтверждения: {action.tool}",
+            "- Вызывай его, только если в этом сообщении пользователь явно согласился.",
+        ]
+
+    async def _call_tool(
+        self, call: ToolCall, user: User, tools: dict[str, Tool], turn_id: str
+    ) -> ToolResult:
+        tool = tools.get(call.name)
+        if tool is not None and tool.requires_confirmation:
+            action = self.pending.get(user.id)
+            if action is None or action.tool != call.name or action.turn_id == turn_id:
+                return ToolResult(
+                    ok=False,
+                    error_code="CONFIRMATION_REQUIRED",
+                    error_message=CONFIRMATION_REQUIRED_TEXT,
+                )
+            result = await self.registry.call(call.name, action.confirm_args(), user)
+            if result.ok or result.error_code not in RETRYABLE_CODES:
+                self.pending.pop(user.id)
+            return result
+
+        result = await self.registry.call(call.name, call.arguments, user)
+        if tool is not None and tool.confirmed_by and result.ok and isinstance(result.data, dict):
+            self.pending.put(user.id, tool.confirmed_by, result.data, turn_id)
+            draft = {key: value for key, value in result.data.items() if key not in HIDDEN_FIELDS}
+            return ToolResult(
+                ok=True,
+                data={**draft, "awaiting_confirmation": True, "confirm_tool": tool.confirmed_by},
+                citations=result.citations,
+            )
+        return result
 
     async def _stream_text(self, text: str) -> AsyncIterator[dict[str, Any]]:
         for chunk in chunk_text(text):
@@ -65,10 +113,11 @@ class Agent:
                 await asyncio.sleep(self.stream_delay)
 
     async def run(self, user: User, message: str) -> AsyncIterator[dict[str, Any]]:
-        tools = self.registry.available(user)
-        specs = [tool.spec for tool in tools]
+        tools = {tool.name: tool for tool in self.registry.available(user)}
+        specs = [tool.spec for tool in tools.values()]
+        turn_id = uuid.uuid4().hex
         messages: list[dict[str, Any]] = [
-            build_system_message(user, self.prompt_version),
+            build_system_message(user, self.prompt_version, extra=self._pending_context(user)),
             {"role": "user", "content": message},
         ]
         citations: dict[str, dict[str, str]] = {}
@@ -97,7 +146,7 @@ class Agent:
 
             for call_id, call in calls:
                 yield sse.tool_call(call_id, call.name, "running")
-                result = await self.registry.call(call.name, call.arguments, user)
+                result = await self._call_tool(call, user, tools, turn_id)
                 yield sse.tool_call(call_id, call.name, "success" if result.ok else "error")
                 for item in result.citations:
                     citations[item["id"]] = item
