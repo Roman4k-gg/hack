@@ -1,4 +1,4 @@
-{"id": "kb-jira", "kind": "kb", "person": "dasha", "question": "Как получить доступ к Jira?", "tools": ["search_knowledge"], "citations": ["jira-access"], "contains": ["наставнику", "SSO"]}
+{"id": "kb-jira", "kind": "kb", "person": "dasha", "question": "Как получить доступ к Jira?", "tools": ["search_knowledge"], "citations": ["jira-access"], "forbid_citations": ["vacation-policy"], "contains": ["наставнику", "SSO"]}
 {"id": "kb-code-review", "kind": "kb", "person": "dasha", "question": "Какие правила код-ревью?", "tools": ["search_knowledge"], "citations": ["code-review-guide"], "contains": ["400 строк"]}
 {"id": "kb-first-pr", "kind": "kb", "person": "dasha", "question": "Как открыть первый PR?", "tools": ["search_knowledge"], "citations": ["first-pr"], "contains": ["форк"]}
 {"id": "kb-standup", "kind": "kb", "person": "dasha", "question": "Во сколько у нас дейлик?", "tools": ["search_knowledge"], "citations": ["standup-rules"], "contains": ["10:00"]}

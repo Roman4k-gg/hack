@@ -147,6 +147,7 @@ STOP_WORDS = {
     "когда",
     "почему",
     "зачем",
+    "сколько",
     "какой",
     "какая",
     "какие",
@@ -158,6 +159,9 @@ STOP_WORDS = {
     "хочу",
 }
 SEARCH_LIMIT = 3
+RELEVANCE_CUTOFF = 0.5
+FULL_TEXT_LIMIT = 2000
+DOCUMENT_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 ENDINGS_TEXT = (
     "ами ями ого его ому ему ыми ими ах ях ам ям ов ев ей ой ий ый ая яя ое ее ые ие ом ем "
     "ую юю а я ы и у ю е о"
@@ -198,6 +202,25 @@ def search_item(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+async def with_full_text(item: dict[str, Any], user: User, core: CoreClient) -> dict[str, Any]:
+    document_id = item["document_id"]
+    if not DOCUMENT_ID.match(document_id):
+        return item
+    try:
+        document = await core.get(f"/api/v1/kb/documents/{document_id}", user)
+    except ToolError:
+        return item
+    content = str(document.get("content") or "").strip()
+    if not content:
+        return item
+    return {
+        **item,
+        "chunk": content[:FULL_TEXT_LIMIT],
+        "stale": bool(document.get("stale", item["stale"])),
+        "owner": str(document.get("owner") or ""),
+    }
+
+
 async def search_knowledge(user: User, args: dict[str, Any], core: CoreClient) -> ToolResult:
     query = str(args.get("query") or "").strip()
     if not query:
@@ -218,7 +241,14 @@ async def search_knowledge(user: User, args: dict[str, Any], core: CoreClient) -
             break
 
     ranked = sorted(found.values(), key=lambda item: relevance[item["document_id"]], reverse=True)
-    items = ranked[:SEARCH_LIMIT]
+    best = relevance[ranked[0]["document_id"]] if ranked else 0.0
+    items = [
+        item
+        for item in ranked[:SEARCH_LIMIT]
+        if relevance[item["document_id"]] >= best * RELEVANCE_CUTOFF
+    ]
+    if items:
+        items[0] = await with_full_text(items[0], user, core)
     citations = [
         {"id": item["document_id"], "title": item["title"], "url": item["url"]} for item in items
     ]

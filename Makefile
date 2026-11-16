@@ -12,7 +12,7 @@ ifneq ($(wildcard ai/Dockerfile),)
 DEV_SERVICES += ai
 endif
 
-ifneq ($(wildcard ai/app/mcp.py),)
+ifneq ($(wildcard ai/app/mcp/__main__.py),)
 DEV_SERVICES += mcp
 DEV_PROFILES += mcp
 endif

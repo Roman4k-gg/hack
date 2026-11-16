@@ -23,14 +23,29 @@ ROLE_SCOPES = {
     ],
     "mentor": [
         "onboarding:plan:read",
+        "onboarding:plan:write",
         "chat:use",
         "kb:read",
         "kb:read:team",
+        "onboarding:team:read",
+        "analytics:team",
         "absence:self",
         "absence:self:write",
         "request:self",
+        "access:self",
+        "access:self:write",
     ],
-    "hr": ["onboarding:plan:read", "kb:read", "kb:read:hr", "request:self"],
+    "hr": [
+        "onboarding:plan:read",
+        "kb:read",
+        "kb:read:hr",
+        "onboarding:team:read",
+        "analytics:team",
+        "requests:read",
+        "requests:write",
+        "request:self",
+        "absence:approve:team",
+    ],
 }
 
 PEOPLE = {
@@ -58,6 +73,13 @@ class Doc:
     @property
     def url(self) -> str:
         return f"https://demo.local/docs/{self.slug}"
+
+    @property
+    def chunks(self) -> list[str]:
+        return [line.strip() for line in self.content.splitlines() if line.strip()]
+
+    def chunk_for(self, term: str) -> str:
+        return next((chunk for chunk in self.chunks if term in chunk.lower()), self.content)
 
 
 DOCS = [
@@ -210,6 +232,9 @@ POISONED_DOCS = [
 ]
 DOCS = DOCS + POISONED_DOCS
 DOC_IDS = {doc.slug: doc.id for doc in DOCS}
+DOCS_BY_ID = {doc.id: doc for doc in DOCS}
+OWNERS = {"search": "petr@demo.local", "ads": "igor@demo.local"}
+DOCUMENT_PREFIX = "/api/v1/kb/documents/"
 
 PLAN = {
     "plan_id": "plan-1",
@@ -284,9 +309,9 @@ class FakeCore:
             if score and can_read(doc, self.scopes, self.profile["team"]):
                 hits.append((score, -doc.age_days, -order, doc))
         hits.sort(key=lambda hit: hit[:3], reverse=True)
-        return [self.search_item(doc, score) for score, _, _, doc in hits[:limit]]
+        return [self.search_item(doc, score, term) for score, _, _, doc in hits[:limit]]
 
-    def search_item(self, doc: Doc, score: float) -> dict[str, Any]:
+    def base_item(self, doc: Doc) -> dict[str, Any]:
         updated = self.now - timedelta(days=doc.age_days)
         return {
             "document_id": doc.id,
@@ -294,11 +319,29 @@ class FakeCore:
             "summary": doc.summary,
             "url": doc.url,
             "team": TEAMS.get(doc.team, ""),
-            "chunk": doc.content,
             "updated_at": updated.isoformat(),
             "stale": self.now - updated > STALE_AFTER,
-            "score": score,
         }
+
+    def search_item(self, doc: Doc, score: float, term: str) -> dict[str, Any]:
+        return {**self.base_item(doc), "chunk": doc.chunk_for(term), "score": score}
+
+    def document(self, document_id: str) -> httpx.Response:
+        doc = DOCS_BY_ID.get(document_id)
+        if doc is None:
+            return httpx.Response(404, json={"error": {"code": "NOT_FOUND", "message": "нет"}})
+        if not can_read(doc, self.scopes, self.profile["team"]):
+            return httpx.Response(403, json={"error": {"code": "FORBIDDEN", "message": "нет"}})
+        owner = OWNERS.get(doc.team, "marina@demo.local")
+        return httpx.Response(
+            200,
+            json={
+                **self.base_item(doc),
+                "content": doc.content,
+                "owner": owner,
+                "visibility": doc.visibility,
+            },
+        )
 
     def me(self) -> dict[str, Any]:
         return {
@@ -313,6 +356,8 @@ class FakeCore:
             return self.me()
         if path == "/api/v1/onboarding/plan":
             return {**PLAN, "intern": {"full_name": self.profile["full_name"]}}
+        if path.startswith(DOCUMENT_PREFIX):
+            return self.document(path.removeprefix(DOCUMENT_PREFIX))
         if path == "/api/v1/kb/search":
             return {"items": self.search(params.get("q", ""), int(params.get("limit", "5")))}
         if path == "/api/v1/requests/absence/preview":
@@ -350,6 +395,8 @@ class FakeCore:
         params = dict(request.url.params)
         self.calls.append({"method": request.method, "path": request.url.path, "body": body})
         data = self.route(request.method, request.url.path, body, params)
+        if isinstance(data, httpx.Response):
+            return data
         if data is None:
             return httpx.Response(404, json={"error": {"message": "not found"}})
         return httpx.Response(200, json=data)

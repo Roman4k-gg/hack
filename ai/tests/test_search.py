@@ -17,8 +17,18 @@ JIRA = {
 VPN = {**JIRA, "document_id": "vpn", "title": "Настройка VPN", "score": 0.5}
 
 
-def registry_for(responses: dict[str, list[dict]], seen: list[str] | None = None) -> ToolRegistry:
+DOCUMENTS_PATH = "/api/v1/kb/documents/"
+
+
+def registry_for(
+    responses: dict[str, list[dict]],
+    seen: list[str] | None = None,
+    documents: dict[str, httpx.Response] | None = None,
+) -> ToolRegistry:
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.startswith(DOCUMENTS_PATH):
+            document_id = request.url.path.removeprefix(DOCUMENTS_PATH)
+            return (documents or {}).get(document_id, httpx.Response(404))
         query = request.url.params["q"]
         if seen is not None:
             seen.append(query)
@@ -87,8 +97,60 @@ async def test_search_falls_back_to_keywords_and_merges(intern: User):
     )
 
     assert seen == ["Как получить доступ к Jira?", "доступ", "jira"]
-    assert [item["document_id"] for item in result.data["items"]] == [JIRA["document_id"], "vpn"]
+    assert [item["document_id"] for item in result.data["items"]] == [JIRA["document_id"]]
     assert result.data["items"][0]["score"] == 1.0
+
+
+async def test_search_drops_weak_matches_from_citations(intern: User):
+    close = {**VPN, "score": 0.9}
+    registry = registry_for({"доступ": [JIRA, close, {**VPN, "document_id": "weak", "score": 0.4}]})
+
+    result = await registry.call("search_knowledge", {"query": "доступ"}, intern)
+
+    assert [item["id"] for item in result.citations] == [JIRA["document_id"], "vpn"]
+
+
+async def test_search_reads_full_text_of_best_document(intern: User):
+    full = "\n".join(["1. Напишите наставнику в чат.", "2. Заявка в IT.", "4. Войдите через SSO."])
+    document = httpx.Response(
+        200, json={"content": full, "stale": True, "owner": "petr@demo.local"}
+    )
+    registry = registry_for({"Jira": [JIRA, VPN]}, documents={JIRA["document_id"]: document})
+
+    result = await registry.call("search_knowledge", {"query": "Jira"}, intern)
+
+    best = result.data["items"][0]
+    assert best["chunk"] == full
+    assert best["stale"] is True
+    assert best["owner"] == "petr@demo.local"
+
+
+@pytest.mark.parametrize(
+    "document",
+    [httpx.Response(403), httpx.Response(200, json={"content": "  "})],
+)
+async def test_search_keeps_chunk_when_full_text_unavailable(intern: User, document):
+    registry = registry_for({"Jira": [JIRA]}, documents={JIRA["document_id"]: document})
+
+    result = await registry.call("search_knowledge", {"query": "Jira"}, intern)
+
+    assert result.data["items"][0]["chunk"] == JIRA["chunk"]
+
+
+async def test_search_does_not_request_suspicious_document_ids(intern: User):
+    requested: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested.append(request.url.path)
+        return httpx.Response(200, json={"items": [{**JIRA, "document_id": "../admin"}]})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    registry = ToolRegistry(CoreClient("http://core.test", client=client))
+
+    result = await registry.call("search_knowledge", {"query": "Jira"}, intern)
+
+    assert result.ok
+    assert requested == ["/api/v1/kb/search"]
 
 
 async def test_search_nothing_found(intern: User):
