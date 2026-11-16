@@ -3,6 +3,7 @@ import re
 from datetime import date
 from typing import Any
 
+from app.guardrails.injection import INJECTION_NOTE
 from app.providers.base import LLMResponse, ToolCall, ToolSpec
 from app.providers.mock_dates import absence_type, find_dates, today_from_system
 
@@ -21,6 +22,14 @@ NOT_FOUND_TEXT = (
 )
 FORBIDDEN_TEXT = "У тебя нет прав на эти данные. Если они нужны для работы, обратись к наставнику."
 TOOL_ERROR_TEXT = "Не получилось получить данные, сервис сейчас недоступен. Попробуй чуть позже."
+INJECTION_TEXT = (
+    "Я не могу менять свои правила, раскрывать служебные инструкции или выполнять действия "
+    "в обход подтверждения. Могу помочь с планом адаптации, базой знаний или заявками."
+)
+TAINTED_TEXT = (
+    "В найденном документе была подозрительная инструкция, поэтому я ничего не выполнял. "
+    "Если нужна заявка — попроси меня прямо."
+)
 
 PLAN_WORDS = (
     "дальше",
@@ -253,6 +262,8 @@ def _error_text(error: dict[str, Any]) -> str:
         return FORBIDDEN_TEXT
     if code == "CONFIRMATION_REQUIRED":
         return CONFIRMATION_TEXT
+    if code == "INJECTION_SUSPECTED":
+        return TAINTED_TEXT
     if code == "VALIDATION_ERROR":
         return f"Не получилось: {error.get('message') or 'проверь данные'}."
     return TOOL_ERROR_TEXT
@@ -274,6 +285,13 @@ def _answer_from_tool(name: str, payload: dict[str, Any]) -> str:
     }
     builder = builders.get(name)
     return builder(result) if builder else FALLBACK_TEXT
+
+
+def _flagged(messages: list[dict[str, Any]]) -> bool:
+    return any(
+        message.get("role") == "system" and INJECTION_NOTE in str(message.get("content") or "")
+        for message in messages
+    )
 
 
 def _pending_tool(messages: list[dict[str, Any]]) -> str:
@@ -314,6 +332,9 @@ class MockProvider:
         if results:
             name, payload = results[-1]
             return LLMResponse(text=_answer_from_tool(name, payload), model="mock")
+
+        if _flagged(messages):
+            return LLMResponse(text=INJECTION_TEXT, model="mock")
 
         question = str(messages[user_index].get("content") or "").strip()
         lowered = question.lower()

@@ -15,6 +15,7 @@ from app.agent.mcp_tools import MCPToolRegistry
 from app.agent.tools import CoreClient, ToolBackend, ToolRegistry
 from app.auth import User, current_user
 from app.config import Settings, get_settings
+from app.guardrails.rate_limit import RateLimiter
 from app.providers import build_provider
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ router = APIRouter()
 
 INTERNAL_ERROR_TEXT = "Что-то пошло не так. Попробуй ещё раз."
 TRACE_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+RATE_LIMIT_TEXT = "Слишком много сообщений подряд. Подожди минуту и попробуй снова."
 
 
 class ChatRequest(BaseModel):
@@ -51,6 +53,15 @@ def get_agent() -> Agent:
     )
 
 
+@lru_cache
+def get_rate_limiter() -> RateLimiter:
+    return RateLimiter(limit=get_settings().rate_limit_per_minute)
+
+
+async def single_event(event: dict) -> AsyncIterator[str]:
+    yield sse.format_event(event)
+
+
 def trace_id_from(*candidates: str | None) -> str:
     for value in candidates:
         if value and TRACE_PATTERN.match(value):
@@ -74,10 +85,18 @@ async def chat_stream(
     body: ChatRequest,
     user: Annotated[User, Depends(current_user)],
     agent: Annotated[Agent, Depends(get_agent)],
+    limiter: Annotated[RateLimiter, Depends(get_rate_limiter)],
     x_request_id: Annotated[str | None, Header()] = None,
     x_trace_id: Annotated[str | None, Header()] = None,
 ) -> StreamingResponse:
     trace_id = trace_id_from(x_trace_id, x_request_id)
+    if not limiter.allow(user.id):
+        return StreamingResponse(
+            single_event(sse.error(RATE_LIMIT_TEXT)),
+            status_code=429,
+            media_type="text/event-stream",
+            headers={"Retry-After": "60", "X-Trace-Id": trace_id},
+        )
     return StreamingResponse(
         stream_events(agent, user, body.message.strip(), trace_id),
         media_type="text/event-stream",

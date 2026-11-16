@@ -56,7 +56,19 @@ uv run uvicorn app.main:app --reload --port 8000
 
 Остальные переменные — в `app/config.py`: `CORE_URL`, `MCP_URL`, `JWT_SECRET`, `LLM_MODEL`,
 `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_RETRIES`, `LLM_RETRY_DELAY`, `MAX_TOOL_ITERATIONS`,
-`TOOL_TIMEOUT`, `LOG_LEVEL`, `LOG_JSON`.
+`TOOL_TIMEOUT`, `LOG_LEVEL`, `LOG_JSON`, `RATE_LIMIT_PER_MINUTE`.
+
+## Guardrails
+
+- **Вход:** длина сообщения до 4000 символов, не больше `RATE_LIMIT_PER_MINUTE` сообщений в минуту
+  на пользователя (иначе `429`), эвристика prompt injection (`app/guardrails/injection.py`). Она не
+  блокирует запрос, а добавляет модели предупреждение и пишет флаги в `agent_run.injection_input`.
+- **Данные инструментов:** предложения, похожие на инструкции для модели, заменяются на
+  «[фрагмент скрыт…]». Если такое нашлось, действия (`preview_*`, `create_*`) до конца ответа
+  блокируются с ошибкой `INJECTION_SUSPECTED`.
+- **Выход:** email, телефоны и секреты (`sk-…`, `ghp_…`, JWT, `пароль: …`) маскируются и в данных
+  для модели, и в финальном ответе (`app/guardrails/pii.py`).
+- Мутации — только через preview и подтверждение в следующем сообщении.
 
 ## Логи
 
@@ -77,10 +89,14 @@ uv run uvicorn app.main:app --reload --port 8000
 
 ```bash
 uv run python -m evals.run
+uv run python -m evals.run --suite injection
 uv run python -m evals.run --mode real --min-pass 0.8
 ```
 
-Отчёт пишется в `evals/report.md`. В CI golden set прогоняется в mock-режиме внутри pytest.
+`evals/injection.jsonl` — 21 кейс атак: через сообщение пользователя, через «отравленные»
+документы, утечки ПДн и секретов, плюс безобидные вопросы против ложных срабатываний.
+
+Отчёты пишутся в `evals/report.md` и `evals/injection_report.md`. В CI golden set прогоняется в mock-режиме внутри pytest.
 
 ## Проверки
 

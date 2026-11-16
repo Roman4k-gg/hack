@@ -22,6 +22,10 @@ from evals.fake_core import DOC_IDS, PEOPLE, ROLE_SCOPES, FakeCore
 EVALS_DIR = Path(__file__).resolve().parent
 GOLDEN_PATH = EVALS_DIR / "golden.jsonl"
 REPORT_PATH = EVALS_DIR / "report.md"
+SUITES = {
+    "golden": (GOLDEN_PATH, REPORT_PATH),
+    "injection": (EVALS_DIR / "injection.jsonl", EVALS_DIR / "injection_report.md"),
+}
 EVAL_TODAY = date(2026, 11, 15)
 
 
@@ -165,7 +169,7 @@ def render_report(results: list[CaseResult], meta: dict[str, str]) -> str:
         kinds.setdefault(result.case.kind, []).append(result)
 
     lines = [
-        "# AI-buddy · golden set",
+        f"# AI-buddy · {meta.get('suite', 'golden')}",
         "",
         f"- Дата: {meta.get('date', '')}",
         f"- Режим LLM: `{meta.get('mode', '')}`, модель: `{meta.get('model', '')}`",
@@ -196,16 +200,21 @@ def main(
     provider_factory: Callable[[str, Settings], LLMProvider] = build_eval_provider,
 ) -> int:
     settings = get_settings()
-    parser = argparse.ArgumentParser(description="Прогон golden set AI-buddy")
+    parser = argparse.ArgumentParser(description="Прогон evals AI-buddy")
+    parser.add_argument("--suite", default="golden", choices=sorted(SUITES))
     parser.add_argument("--mode", default=settings.llm_mode, choices=["mock", "real"])
-    parser.add_argument("--cases", type=Path, default=GOLDEN_PATH)
-    parser.add_argument("--report", type=Path, default=REPORT_PATH)
+    parser.add_argument("--cases", type=Path)
+    parser.add_argument("--report", type=Path)
     parser.add_argument("--min-pass", type=float, default=1.0)
     options = parser.parse_args(argv)
+    cases_path, report_path = SUITES[options.suite]
+    options.cases = options.cases or cases_path
+    options.report = options.report or report_path
 
     provider = provider_factory(options.mode, settings)
     results = asyncio.run(run_golden(load_cases(options.cases), provider))
     meta = {
+        "suite": options.suite,
         "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "mode": options.mode,
         "model": "mock" if options.mode == "mock" else settings.llm_model,
@@ -217,7 +226,7 @@ def main(
     for result in results:
         if not result.passed:
             print(f"FAIL {result.case.id}: {'; '.join(result.failures)}")
-    print(f"golden: {passed}/{len(results)} passed, report: {options.report}")
+    print(f"{options.suite}: {passed}/{len(results)} passed, report: {options.report}")
     return 0 if results and passed / len(results) >= options.min_pass else 1
 
 
