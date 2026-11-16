@@ -754,6 +754,7 @@ AI-сервис обязан отдавать `event: message` и `data` с по
 
 | `type` | `data` | Что делает фронт |
 |---|---|---|
+| `meta` | `{ "type": "meta", "conversation_id": "70c431fd-..." }` | первое событие потока: сохраняет id диалога |
 | `delta` | `{ "type": "delta", "text": "Твой следующий шаг — " }` | дописывает текст в последнее сообщение |
 | `citation` | `{ "type": "citation", "citation": { "id", "title", "url"? } }` | добавляет чип-цитату |
 | `tool_call` | `{ "type": "tool_call", "toolCall": { "id", "name", "status": "running\|success\|error" } }` | карточка вызова инструмента |
@@ -763,6 +764,9 @@ AI-сервис обязан отдавать `event: message` и `data` с по
 Пример потока:
 
 ```
+event: message
+data: {"type":"meta","conversation_id":"70c431fd-7734-4beb-a17e-e13994a62786"}
+
 event: message
 data: {"type":"delta","text":"Чтобы получить доступ к Jira, "}
 
@@ -886,6 +890,69 @@ curl -s -X PATCH http://localhost:8081/api/v1/onboarding/items/<item-id> \
    фронт — Zod-схема + `make smoke`.
 4. SSE-схему меняешь только в `web/src/features/chat/schemas.ts` и в этом файле,
    плюс синхронно с AI-сервисом (T-04).
+
+---
+
+### 3.22 `GET /api/v1/conversations`
+
+Список сохранённых диалогов пользователя. **Реализовано 16 ноября.**
+
+**Скоуп:** `chat:history`
+
+**Ответ `200`**
+
+```json
+[
+  {
+    "id": "70c431fd-7734-4beb-a17e-e13994a62786",
+    "title": "Где взять доступ к Jira?",
+    "created_at": "2026-11-16T10:00:00Z",
+    "updated_at": "2026-11-16T10:05:00Z",
+    "message_count": 4
+  }
+]
+```
+
+### 3.23 `GET /api/v1/conversations/{id}/messages`
+
+Сообщения диалога. **Реализовано 16 ноября.**
+
+**Скоуп:** `chat:history`
+
+**Ответ `200`**
+
+```json
+[
+  {
+    "id": "6f1c2d3e-4b5a-4968-8776-655443332211",
+    "role": "user",
+    "content": "Где взять доступ к Jira?",
+    "tool_calls": [],
+    "citations": [],
+    "created_at": "2026-11-16T10:00:00Z"
+  },
+  {
+    "id": "7a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+    "role": "assistant",
+    "content": "Спроси наставника — доступ оформляет он.",
+    "tool_calls": [{ "id": "call-1", "name": "get_onboarding_plan", "status": "success" }],
+    "citations": [{ "id": "jira-access", "title": "Как получить доступ к Jira", "url": "https://demo.local/docs/jira-access" }],
+    "created_at": "2026-11-16T10:00:05Z"
+  }
+]
+```
+
+**Ошибки:** `403 FORBIDDEN` (диалог другого пользователя), `404 NOT_FOUND` (диалога нет).
+
+### 3.24 Продолжение диалога
+
+В теле `POST /api/v1/chat/stream` можно передать `conversation_id` — тогда ответ
+допишется в существующий диалог. Без него создаётся новый диалог, а его
+идентификатор приходит первым SSE-событием `meta`.
+
+```json
+{ "message": "а где взять VPN?", "conversation_id": "70c431fd-7734-4beb-a17e-e13994a62786" }
+```
 
 ---
 

@@ -36,6 +36,7 @@ func New(deps Deps) chi.Router {
 		r.Get("/me", deps.Auth.Me())
 		r.Mount("/onboarding", deps.Onboarding.Router())
 		r.Mount("/chat", deps.Chat.Router())
+		r.Mount("/conversations", deps.Chat.HistoryRouter())
 		r.Mount("/team", deps.Team.Router())
 		r.Mount("/kb", deps.KB.Router())
 		r.Mount("/requests", deps.Requests.Router())

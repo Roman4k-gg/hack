@@ -9,10 +9,14 @@ interface ChatState {
     status: ChatStatus;
     error: string | null;
     activeMessageId: string | null;
+    conversationId: string | null;
     sendMessage: (content: string) => void;
     applyEvent: (event: ChatEvent) => void;
+    setConversationId: (conversationId: string | null) => void;
+    loadConversation: (conversationId: string, messages: ChatMessage[]) => void;
     fail: (message: string) => void;
     finish: () => void;
+    reset: () => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -20,6 +24,7 @@ export const useChatStore = create<ChatState>((set) => ({
     status: 'idle',
     error: null,
     activeMessageId: null,
+    conversationId: null,
 
     sendMessage: (content) => {
         const text = content.trim();
@@ -53,6 +58,10 @@ export const useChatStore = create<ChatState>((set) => ({
 
     applyEvent: (event) => set((state) => {
         if (!state.activeMessageId) return state;
+
+        if (event.type === 'meta') {
+            return { ...state, conversationId: event.conversation_id };
+        }
 
         if (event.type === 'error') {
             return {
@@ -111,5 +120,24 @@ export const useChatStore = create<ChatState>((set) => ({
     finish: () => set({
         status: 'idle',
         activeMessageId: null,
+    }),
+
+    setConversationId: (conversationId) => set({ conversationId }),
+
+    loadConversation: (conversationId, messages) =>
+        set({
+            conversationId,
+            messages,
+            status: 'idle',
+            error: null,
+            activeMessageId: null,
+        }),
+
+    reset: () => set({
+        messages: [],
+        status: 'idle',
+        error: null,
+        activeMessageId: null,
+        conversationId: null,
     }),
 }));

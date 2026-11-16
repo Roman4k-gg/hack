@@ -94,6 +94,7 @@ func newTestRouter(t *testing.T, aiURL string) (http.Handler, *auth.TokenManager
 		}, chat.NewClient(), nil),
 		nil,
 		nil,
+		nil,
 	)
 
 	return New(Deps{

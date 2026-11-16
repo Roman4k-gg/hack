@@ -111,6 +111,12 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
 - [`docs/api-contract.md`](docs/api-contract.md) — контракт между бэкендом и
   фронтендом: что принимает core, что ждёт web, JWT и скоупы, формат ошибок,
   SSE-события, формулы метрик.
+- [`specs/001-ai-buddy/`](specs/001-ai-buddy/) — SDD-спецификации: требования и
+  критерии приёмки (`spec.md`), архитектура и решения (`plan.md`), задачи по
+  ролям (`tasks.md`), контракты (`contracts/rest.yaml`, `contracts/sse.md`,
+  `contracts/mcp/tools.json`), промпт (`prompts/system.md`).
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — архитектура, стек, потоки, риски, ADR.
+- [`plan_hackathon.md`](plan_hackathon.md) — план работ и прогресс по ролям.
 
 ## Демо-аккаунты
 
@@ -147,6 +153,21 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
 | GET   | `/api/v1/team/interns`           | скоуп `onboarding:team:read` | стажёры с метриками и сводка       |
 | GET   | `/api/v1/team/overview`          | скоуп `analytics:team`   | сводные метрики по команде            |
 | POST  | `/api/v1/chat/stream`            | скоуп `chat:use`          | SSE-прокси к AI-сервису               |
+| GET   | `/api/v1/kb/search`              | скоуп `kb:read*`          | поиск по базе знаний с ACL            |
+| GET   | `/api/v1/kb/documents/{id}`      | скоуп `kb:read*`          | документ целиком                      |
+| GET   | `/api/v1/team/interns/{id}/plan` | скоуп `onboarding:team:read` | план адаптации стажёра для наставника |
+| POST  | `/api/v1/requests/absence/preview` | скоуп `absence:self`   | черновик заявки на отгул + токен      |
+| POST  | `/api/v1/requests/absence`       | скоуп `absence:self:write` | создание заявки по подтверждению   |
+| POST  | `/api/v1/requests/access/preview` | скоуп `access:self`      | пакет доступов по роли                |
+| POST  | `/api/v1/requests/access`        | скоуп `access:self:write` | заявки на доступы по подтверждению  |
+| GET   | `/api/v1/requests`               | скоуп `request:self`     | мои заявки                            |
+| GET   | `/api/v1/requests/{id}`          | скоуп `request:self`     | заявка с историей статусов            |
+| GET   | `/api/v1/analytics/top-questions` | скоуп `analytics:team`  | топ вопросов команды                  |
+| GET   | `/api/v1/analytics/content-gaps` | скоуп `analytics:team`   | темы без ответа в базе знаний         |
+| GET   | `/api/v1/conversations`          | скоуп `chat:history`     | список сохранённых диалогов           |
+| GET   | `/api/v1/conversations/{id}/messages` | скоуп `chat:history` | сообщения диалога                  |
+| GET   | `/api/v1/admin/feature-flags`    | скоуп `admin:flags`      | реестр фиче-флагов                    |
+| PATCH | `/api/v1/admin/feature-flags/{key}` | скоуп `admin:flags`   | включение или выключение флага        |
 
 Смена статуса пункта:
 
@@ -258,24 +279,60 @@ go run ./cmd/api
 ## Тесты и покрытие
 
 ```bash
-make test-core     # go test ./...
-make coverage      # гонки + coverage.out + coverage.html
-make lint          # go vet + golangci-lint
-make fmt           # gofmt
+make test-core       # go test ./...
+make coverage        # прогоны + coverage.out + coverage.html
+make coverage-gate   # тот же прогон + проверка порога покрытия
+make lint            # go vet + golangci-lint
+make fmt             # gofmt
 ```
 
-Интеграционные тесты (нужна база) включаются переменной:
+**Покрытие прикладного кода — 82%** (требование кейса — не меньше 80%).
+Порог проверяется автоматически: `make coverage-gate` и джоб `Go · core с PostgreSQL`
+в CI падают, если процент ниже `CORE_COVERAGE_MIN` (по умолчанию 80).
+
+Интеграционные тесты (нужны база и Redis) включаются переменными:
 
 ```bash
 POSTGRES_TEST_DSN=postgres://buddy:buddy@localhost:5432/buddy?sslmode=disable \
+REDIS_TEST_ADDR=127.0.0.1:6379 \
   go test ./... -race
 ```
+
+Без этих переменных интеграционные тесты пропускаются, а юнит-тесты идут как обычно.
+
+## Тесты фронтенда
+
+```bash
+cd web
+npm run test        # vitest: юнит-тесты логики, схем и компонентов
+npm run test:coverage
+npm run test:e2e    # playwright: сквозные сценарии в браузере
+```
+
+- **Vitest** — 67 тестов: парсер SSE, схемы событий, api-клиент, стор чата,
+  смена пользователя, компоненты чата и UI-кит, схемы против ответов бэка.
+- **Playwright** — 13 сквозных сценариев: вход и ролевые редиректы, карта
+  (этапы, прогресс, смена статуса, ошибка api), дашборд наставника, заявки,
+  чат с инструментом и цитатой, очистка истории при смене профиля.
+- В CI это отдельные джобы `Web` и `Web · e2e`.
+
+**Маршруты интерфейса:** `/login`, `/chat` (бывший `/`, теперь редиректит),
+`/map`, `/dashboard`, `/requests`, `/team/{internId}` — все внутри общего каркаса,
+поэтому на любом экране есть сайдбар и кнопка выхода.
+
+**Память диалогов:** переписка сохраняется в PostgreSQL (`conversations`,
+`messages`). В чате есть «История диалогов» (список и загрузка переписки) и
+«Новый диалог». Идентификатор диалога приходит первым SSE-событием `meta` и
+уходит обратно в core, чтобы продолжить тот же диалог.
 
 ## CI
 
 `.github/workflows/ci.yml`: форматирование, `go vet`, тесты с `-race` и покрытием,
-интеграционные тесты с PostgreSQL, сборка Docker-образа. Задачи Python (`ai`) и
-Web включаются автоматически, когда появились соответствующие каталоги.
+интеграционные тесты с PostgreSQL и Redis, **гейт покрытия 80%**, сборка всех
+Docker-образов (core, web, ai), линт и типы фронтенда, тесты фронтенда с покрытием,
+**сквозные e2e-сценарии в браузере**, тесты AI-сервиса, сквозная проверка стенда.
+Задачи Python (`ai`) и Web включаются автоматически, когда появились
+соответствующие каталоги.
 
 ## Windows
 
