@@ -15,6 +15,10 @@ export const toolCallSchema = z.object({
 
 export const chatEventSchema = z.discriminatedUnion('type', [
     z.object({
+        type: z.literal('meta'),
+        conversation_id: z.string(),
+    }),
+    z.object({
         type: z.literal('delta'),
         text: z.string(),
     }),

@@ -8,12 +8,13 @@ import (
 const (
 	ScopeAll = "*"
 
-	ScopePlanRead   = "onboarding:plan:read"
-	ScopePlanWrite  = "onboarding:plan:write"
-	ScopeChat       = "chat:use"
-	ScopeKBRead     = "kb:read"
-	ScopeKBReadTeam = "kb:read:team"
-	ScopeKBReadHR   = "kb:read:hr"
+	ScopePlanRead    = "onboarding:plan:read"
+	ScopePlanWrite   = "onboarding:plan:write"
+	ScopeChat        = "chat:use"
+	ScopeChatHistory = "chat:history"
+	ScopeKBRead      = "kb:read"
+	ScopeKBReadTeam  = "kb:read:team"
+	ScopeKBReadHR    = "kb:read:hr"
 
 	ScopeRequestsRead  = "requests:read"
 	ScopeRequestsWrite = "requests:write"
@@ -42,17 +43,17 @@ const (
 
 var roleScopes = map[string][]string{
 	RoleIntern: {
-		ScopePlanRead, ScopePlanWrite, ScopeChat, ScopeKBRead, ScopeKBReadTeam,
+		ScopePlanRead, ScopePlanWrite, ScopeChat, ScopeChatHistory, ScopeKBRead, ScopeKBReadTeam,
 		ScopeAbsenceSelf, ScopeAbsenceSelfWrite, ScopeRequestSelf,
 		ScopeAccessSelf, ScopeAccessSelfWrite,
 	},
 	RoleMentor: {
-		ScopePlanRead, ScopePlanWrite, ScopeChat, ScopeKBRead, ScopeKBReadTeam,
+		ScopePlanRead, ScopePlanWrite, ScopeChat, ScopeChatHistory, ScopeKBRead, ScopeKBReadTeam,
 		ScopeTeamRead, ScopeAnalyticsTeam, ScopeAbsenceSelf, ScopeAbsenceSelfWrite, ScopeRequestSelf,
 		ScopeAccessSelf, ScopeAccessSelfWrite,
 	},
 	RoleManager: {
-		ScopePlanRead, ScopePlanWrite, ScopeChat, ScopeKBRead, ScopeKBReadTeam,
+		ScopePlanRead, ScopePlanWrite, ScopeChat, ScopeChatHistory, ScopeKBRead, ScopeKBReadTeam,
 		ScopeTeamRead, ScopeAnalyticsTeam, ScopeRequestsRead, ScopeRequestsWrite,
 		ScopeAbsenceSelf, ScopeAbsenceSelfWrite, ScopeRequestSelf, ScopeAbsenceApproveTeam,
 	},

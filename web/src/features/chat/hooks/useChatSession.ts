@@ -54,9 +54,13 @@ export function useChatSession() {
         return useChatStore.getState().activeMessageId === messageId;
       }
 
+      const conversationId = useChatStore.getState().conversationId;
+
       void start({
         url: CHAT_URL,
-        body: { message: text },
+        body: conversationId
+          ? { message: text, conversation_id: conversationId }
+          : { message: text },
         headers: token
           ? { Authorization: `Bearer ${token}` }
           : undefined,
@@ -71,6 +75,11 @@ export function useChatSession() {
             parsed = parseChatEvent(event);
           } catch {
             throw new Error('Получено некорректное событие ответа');
+          }
+
+          if (parsed.type === 'meta') {
+            useChatStore.getState().setConversationId(parsed.conversation_id);
+            return;
           }
 
           receivedEvent = true;

@@ -164,6 +164,8 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
 | GET   | `/api/v1/requests/{id}`          | скоуп `request:self`     | заявка с историей статусов            |
 | GET   | `/api/v1/analytics/top-questions` | скоуп `analytics:team`  | топ вопросов команды                  |
 | GET   | `/api/v1/analytics/content-gaps` | скоуп `analytics:team`   | темы без ответа в базе знаний         |
+| GET   | `/api/v1/conversations`          | скоуп `chat:history`     | список сохранённых диалогов           |
+| GET   | `/api/v1/conversations/{id}/messages` | скоуп `chat:history` | сообщения диалога                  |
 | GET   | `/api/v1/admin/feature-flags`    | скоуп `admin:flags`      | реестр фиче-флагов                    |
 | PATCH | `/api/v1/admin/feature-flags/{key}` | скоуп `admin:flags`   | включение или выключение флага        |
 
@@ -317,6 +319,11 @@ npm run test:e2e    # playwright: сквозные сценарии в брау�
 **Маршруты интерфейса:** `/login`, `/chat` (бывший `/`, теперь редиректит),
 `/map`, `/dashboard`, `/requests`, `/team/{internId}` — все внутри общего каркаса,
 поэтому на любом экране есть сайдбар и кнопка выхода.
+
+**Память диалогов:** переписка сохраняется в PostgreSQL (`conversations`,
+`messages`). В чате есть «История диалогов» (список и загрузка переписки) и
+«Новый диалог». Идентификатор диалога приходит первым SSE-событием `meta` и
+уходит обратно в core, чтобы продолжить тот же диалог.
 
 ## CI
 
