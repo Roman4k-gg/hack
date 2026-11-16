@@ -1,7 +1,7 @@
 # REST-контракты
 
 Источник истины по REST — [`docs/api-contract.md`](../../../docs/api-contract.md) (ведёт Рома).
-Отдельный `rest.yaml` не дублируем, чтобы не было двух версий правды.
+Машинно-читаемая выжимка API core — [`rest.yaml`](rest.yaml) (OpenAPI, тоже ведёт Рома).
 
 ## Что отдаёт AI-сервис (`ai`, порт 8000)
 
@@ -10,6 +10,7 @@
 | `GET` | `/healthz` | `{"status":"ok"}` |
 | `GET` | `/readyz` | `{"status":"ok","llm_mode":"mock","prompt_version":"v1"}` |
 | `POST` | `/api/v1/chat/stream` | Тело `{"message", "user_id"?, "role"?}` (§3.7), заголовок `Authorization: Bearer <JWT core>`, ответ — SSE ([sse.md](sse.md)) |
+| `DELETE` | `/api/v1/chat/history` | Очистить историю диалога и ожидающий черновик пользователя, `204` |
 
 Ответы `/api/v1/chat/stream` кроме SSE: `401` — нет или плохой JWT, `422` — пустое сообщение
 или длиннее 4000 символов, `429` — rate limit (SSE-событие `error`).
@@ -26,6 +27,26 @@
 | `get_my_requests` | `GET /api/v1/requests` | §3.12, §10.5 |
 | `preview_access_bundle` | `POST /api/v1/requests/access/preview` | §3.14, §10.6 |
 | `create_access_requests` | `POST /api/v1/requests/access` | §3.15, §10.6 |
+| `preview_handoff` | — (черновик собирается в AI) | — |
+| `create_handoff` | `POST /api/v1/handoffs` | предложение, в core пока нет |
+
+### `POST /api/v1/handoffs` — предложение для core
+
+Вопрос стажёра наставнику. Скоуп `request:self`, наставник — из профиля пользователя.
+
+```json
+{"question": "Какой пароль от Wi-Fi?", "context": "", "idempotency_key": "<preview_id>"}
+```
+
+Ответ `200`/`201`:
+
+```json
+{"request_id": "...", "status": "pending", "external_id": "HND-101",
+ "mentor": {"full_name": "Пётр Иванов"}, "next_step": "Наставник ответит в мессенджере"}
+```
+
+Повтор с тем же `idempotency_key` возвращает ту же запись. Пока эндпоинта нет, core отвечает
+`404`, агент говорит, что передать не получилось, и советует написать наставнику напрямую.
 
 ## MCP (`mcp`, порт 8001)
 

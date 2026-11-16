@@ -26,6 +26,7 @@ class AgentRun:
     tools: list[dict[str, Any]] = field(default_factory=list)
     input_flags: list[str] = field(default_factory=list)
     tool_flags: list[str] = field(default_factory=list)
+    history_messages: int = 0
     status: str = "cancelled"
     error: str = ""
 
@@ -70,6 +71,7 @@ class AgentRun:
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
             "message_length": self.message_length,
+            "history_messages": self.history_messages,
             "tool_calls": self.tools,
             "injection_input": self.input_flags,
             "injection_tools": self.tool_flags,

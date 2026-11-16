@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     llm_timeout: float = 30.0
     llm_retries: int = 1
     llm_retry_delay: float = 0.5
+    llm_max_tokens: int = 800
+    llm_temperature: float = 0.2
+    llm_reasoning_effort: str = ""
 
     tools_mode: str = "mcp"
     mcp_url: str = "http://localhost:8001/mcp"
@@ -31,6 +34,8 @@ class Settings(BaseSettings):
     log_level: str = "info"
     log_json: bool = True
     rate_limit_per_minute: int = 20
+    history_turns: int = 5
+    history_ttl: float = 1800.0
 
 
 @lru_cache

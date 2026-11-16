@@ -41,6 +41,10 @@ CREATE_ACCESS_DESCRIPTION = (
     "Нужны preview_id и confirmation_token из preview_access_bundle и idempotency_key. "
     "Вызывать только после явного согласия пользователя."
 )
+CREATE_HANDOFF_DESCRIPTION = (
+    "Отправить наставнику вопрос из подтверждённого черновика preview_handoff. "
+    "Нужны question и idempotency_key. Вызывать только после явного согласия пользователя."
+)
 INSTRUCTIONS = (
     "Инструменты AI-buddy для стажёров Авито. Каждый вызов выполняется с JWT пользователя "
     "из заголовка Authorization и строго в его правах."
@@ -179,6 +183,31 @@ def build_server(
     )
     async def get_my_requests(ctx: Context) -> dict[str, Any]:
         return await handle(registry, settings, "get_my_requests", {}, ctx.headers)
+
+    @server.tool(
+        name="preview_handoff",
+        description=descriptions["preview_handoff"],
+        annotations=PREVIEW,
+    )
+    async def preview_handoff(question: str, ctx: Context, context: str = "") -> dict[str, Any]:
+        args = {"question": question, "context": context}
+        return await handle(registry, settings, "preview_handoff", args, ctx.headers)
+
+    @server.tool(
+        name="create_handoff",
+        description=CREATE_HANDOFF_DESCRIPTION,
+        annotations=WRITE,
+    )
+    async def create_handoff(
+        question: str,
+        idempotency_key: str,
+        ctx: Context,
+        context: str = "",
+        preview_id: str = "",
+        confirmation_token: str = "",
+    ) -> dict[str, Any]:
+        args = {"question": question, "context": context, "idempotency_key": idempotency_key}
+        return await handle(registry, settings, "create_handoff", args, ctx.headers)
 
     @server.custom_route("/healthz", methods=["GET"])
     async def healthz(request: Request) -> JSONResponse:

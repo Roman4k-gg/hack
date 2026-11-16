@@ -1,4 +1,5 @@
 import re
+import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import date
@@ -250,7 +251,13 @@ async def search_knowledge(user: User, args: dict[str, Any], core: CoreClient) -
     if items:
         items[0] = await with_full_text(items[0], user, core)
     citations = [
-        {"id": item["document_id"], "title": item["title"], "url": item["url"]} for item in items
+        {
+            "id": item["document_id"],
+            "title": item["title"],
+            "url": item["url"],
+            **({"stale": True} if item["stale"] else {}),
+        }
+        for item in items
     ]
     return ToolResult(ok=True, data={"query": query, "items": items}, citations=citations)
 
@@ -314,6 +321,57 @@ async def preview_access_bundle(user: User, args: dict[str, Any], core: CoreClie
 async def create_access_requests(user: User, args: dict[str, Any], core: CoreClient) -> ToolResult:
     body = confirmation_body(args)
     return ToolResult(ok=True, data=await core.post("/api/v1/requests/access", user, body))
+
+
+HANDOFF_QUESTION_LIMIT = 1000
+
+
+async def preview_handoff(user: User, args: dict[str, Any], core: CoreClient) -> ToolResult:
+    question = " ".join(str(args.get("question") or "").split())
+    if len(question) < 3:
+        raise ToolError("VALIDATION_ERROR", "Нужен вопрос, который передать наставнику")
+    payload = {
+        "question": question[:HANDOFF_QUESTION_LIMIT],
+        "context": " ".join(str(args.get("context") or "").split())[:HANDOFF_QUESTION_LIMIT],
+    }
+    return ToolResult(
+        ok=True,
+        data={
+            "preview_id": uuid.uuid4().hex,
+            "confirmation_token": uuid.uuid4().hex,
+            "draft": payload,
+            "payload": payload,
+        },
+    )
+
+
+def person_name(value: Any) -> str:
+    if isinstance(value, dict):
+        return str(value.get("full_name") or "")
+    return str(value or "")
+
+
+async def create_handoff(user: User, args: dict[str, Any], core: CoreClient) -> ToolResult:
+    question = str(args.get("question") or "").strip()
+    idempotency_key = str(args.get("idempotency_key") or "").strip()
+    if not question or not idempotency_key:
+        raise ToolError("CONFIRMATION_REQUIRED", "Нужен предпросмотр и подтверждение пользователя")
+    body = {
+        "question": question,
+        "context": str(args.get("context") or ""),
+        "idempotency_key": idempotency_key,
+    }
+    data = await core.post("/api/v1/handoffs", user, body)
+    return ToolResult(
+        ok=True,
+        data={
+            "request_id": data.get("request_id", ""),
+            "status": data.get("status", "pending"),
+            "external_id": data.get("external_id", ""),
+            "mentor": person_name(data.get("mentor") or data.get("approver")),
+            "next_step": data.get("next_step", ""),
+        },
+    )
 
 
 async def get_my_requests(user: User, args: dict[str, Any], core: CoreClient) -> ToolResult:
@@ -452,6 +510,41 @@ DEFAULT_TOOLS = [
         ),
         handler=get_my_requests,
         scope="request:self",
+    ),
+    Tool(
+        spec=ToolSpec(
+            name="preview_handoff",
+            description=(
+                "Готовит черновик вопроса наставнику, когда ответа нет в базе знаний или "
+                "пользователь просит передать вопрос. Ничего не отправляет. После черновика "
+                "попроси пользователя явно подтвердить."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "question": {"type": "string", "maxLength": HANDOFF_QUESTION_LIMIT},
+                    "context": {"type": "string", "maxLength": HANDOFF_QUESTION_LIMIT},
+                },
+                "required": ["question"],
+                "additionalProperties": False,
+            },
+        ),
+        handler=preview_handoff,
+        scope="request:self",
+        confirmed_by="create_handoff",
+    ),
+    Tool(
+        spec=ToolSpec(
+            name="create_handoff",
+            description=(
+                "Отправляет наставнику вопрос из последнего черновика. Вызывай только если "
+                "пользователь в новом сообщении явно подтвердил. Аргументы не нужны."
+            ),
+            parameters=NO_ARGS,
+        ),
+        handler=create_handoff,
+        scope="request:self",
+        requires_confirmation=True,
     ),
 ]
 

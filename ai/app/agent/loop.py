@@ -7,6 +7,7 @@ from datetime import date
 from typing import Any
 
 from app import sse
+from app.agent.history import ConversationStore
 from app.agent.pending import HIDDEN_FIELDS, PendingStore
 from app.agent.prompts import build_system_message
 from app.agent.run_log import AgentRun
@@ -22,6 +23,7 @@ LIMIT_TEXT = (
     "Попробуй переформулировать вопрос или спроси наставника."
 )
 LLM_ERROR_TEXT = "AI-модель сейчас недоступна. Попробуй ещё раз чуть позже."
+STALE_TEXT = "⚠️ Документ давно не обновлялся — информация может быть устаревшей."
 CONFIRMATION_REQUIRED_TEXT = (
     "Нет подтверждённого черновика. Сначала подготовь черновик и дождись, "
     "пока пользователь явно подтвердит его в следующем сообщении."
@@ -41,6 +43,13 @@ def chunk_text(text: str, words_per_chunk: int = 3) -> list[str]:
     ]
 
 
+def with_stale_warning(answer: str, citations: dict[str, dict[str, Any]]) -> str:
+    stale = any(item.get("stale") for item in citations.values())
+    if not stale or "устарев" in answer.lower():
+        return answer
+    return f"{answer.rstrip()}\n\n{STALE_TEXT}"
+
+
 def assistant_tool_message(text: str, calls: list[tuple[str, ToolCall]]) -> dict[str, Any]:
     return {
         "role": "assistant",
@@ -53,6 +62,7 @@ def assistant_tool_message(text: str, calls: list[tuple[str, ToolCall]]) -> dict
                     "name": call.name,
                     "arguments": json.dumps(call.arguments, ensure_ascii=False),
                 },
+                **call.extra,
             }
             for call_id, call in calls
         ],
@@ -71,6 +81,7 @@ class Agent:
         llm_retries: int = 1,
         llm_retry_delay: float = 0.0,
         today: Callable[[], date] = date.today,
+        history: ConversationStore | None = None,
     ) -> None:
         self.provider = provider
         self.registry = registry
@@ -81,6 +92,7 @@ class Agent:
         self.llm_retries = llm_retries
         self.llm_retry_delay = llm_retry_delay
         self.today = today
+        self.history = history if history is not None else ConversationStore()
 
     async def _complete(
         self, messages: list[dict[str, Any]], specs: list[ToolSpec], run: AgentRun
@@ -182,11 +194,14 @@ class Agent:
         if run.input_flags:
             extra.append(INJECTION_NOTE)
         tainted = False
+        previous = self.history.messages(user.id)
+        run.history_messages = len(previous)
         messages: list[dict[str, Any]] = [
             build_system_message(user, self.prompt_version, today=self.today(), extra=extra),
+            *previous,
             {"role": "user", "content": message},
         ]
-        citations: dict[str, dict[str, str]] = {}
+        citations: dict[str, dict[str, Any]] = {}
         call_counter = 0
 
         for _ in range(self.max_iterations):
@@ -198,7 +213,10 @@ class Agent:
                 return
 
             if not response.tool_calls:
-                async for event in self._stream_text(mask_pii(response.text)):
+                answer = with_stale_warning(mask_pii(response.text), citations)
+                if not run.input_flags and not tainted:
+                    self.history.add(user.id, mask_pii(message), answer)
+                async for event in self._stream_text(answer):
                     yield event
                 for item in citations.values():
                     yield sse.citation(item["id"], item["title"], item.get("url", ""))

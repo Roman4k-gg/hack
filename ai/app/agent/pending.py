@@ -3,7 +3,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-HIDDEN_FIELDS = ("preview_id", "confirmation_token")
+HIDDEN_FIELDS = ("preview_id", "confirmation_token", "payload")
 
 
 @dataclass
@@ -14,9 +14,11 @@ class PendingAction:
     draft: dict[str, Any]
     turn_id: str
     expires_at: float
+    payload: dict[str, Any] = field(default_factory=dict)
 
-    def confirm_args(self) -> dict[str, str]:
+    def confirm_args(self) -> dict[str, Any]:
         return {
+            **self.payload,
             "preview_id": self.preview_id,
             "confirmation_token": self.confirmation_token,
             "idempotency_key": self.preview_id,
@@ -30,7 +32,9 @@ class PendingStore:
     _items: dict[str, PendingAction] = field(default_factory=dict)
 
     def put(self, user_id: str, tool: str, preview: dict[str, Any], turn_id: str) -> None:
+        payload = preview.get("payload")
         self._items[user_id] = PendingAction(
+            payload=dict(payload) if isinstance(payload, dict) else {},
             tool=tool,
             preview_id=str(preview.get("preview_id") or ""),
             confirmation_token=str(preview.get("confirmation_token") or ""),

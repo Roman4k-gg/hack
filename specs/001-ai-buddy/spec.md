@@ -49,6 +49,8 @@ AI-buddy — чат-наставник, который:
 | `get_my_requests` | чтение | `request:self` | ✅ | ✅ | ✅ |
 | `preview_access_bundle` | черновик | `access:self` | ✅ | ✅ | — |
 | `create_access_requests` | запись + подтверждение | `access:self:write` | ✅ | ✅ | — |
+| `preview_handoff` | черновик (локально) | `request:self` | ✅ | ✅ | ✅ |
+| `create_handoff` | запись + подтверждение | `request:self` | ✅ | ✅ | ✅ |
 
 Видимость документов (повторяет core): `public` — всем с `kb:read`; `team` — с
 `kb:read:team` и только своей команды (или без команды); `hr` — только с `kb:read:hr`.
@@ -87,7 +89,16 @@ JSON Schema инструментов — в [`contracts/mcp/`](contracts/mcp).
   Given в доступных документах нет ответа
   When стажёр задаёт вопрос
   Then агент честно говорит, что не нашёл, и предлагает спросить наставника
+  And вызывает preview_handoff и показывает вопрос, который передаст
   And не отправляет цитат
+
+Сценарий: вопрос передаётся наставнику после подтверждения
+  Given агент показал черновик вопроса наставнику
+  When в следующем сообщении стажёр пишет «Да»
+  Then агент вызывает create_handoff с вопросом из черновика и idempotency_key
+  And называет наставника и следующий шаг
+  When core ответил 404 (эндпоинта ещё нет)
+  Then агент честно говорит, что передать не получилось, и советует написать наставнику самому
 
 Сценарий: устаревший документ
   Given документ не обновлялся больше 180 дней
@@ -157,6 +168,8 @@ JSON Schema инструментов — в [`contracts/mcp/`](contracts/mcp).
 | FR-14 | Email, телефоны и секреты маскируются в данных для модели и в финальном ответе. |
 | FR-15 | Не больше `RATE_LIMIT_PER_MINUTE` (20) сообщений в минуту на пользователя, иначе `429`. |
 | FR-16 | `LLM_MODE=mock` — сценарный mock без ключа и сети: все 4 сценария работают на демо. |
+| FR-17 | Агент помнит последние `HISTORY_TURNS` (5) пар «вопрос — ответ» пользователя 30 минут и передаёт их модели; ходы с подозрением на injection и неудачные ходы не запоминаются; `DELETE /api/v1/chat/history` очищает историю и черновик. |
+| FR-18 | Если ответа нет в базе или пользователь просит «передай наставнику» — агент готовит черновик вопроса (`preview_handoff`, без вызова core) и после «да» в следующем сообщении отправляет его в core (`create_handoff` → `POST /api/v1/handoffs`). Если core не поддерживает handoff (404) — честный текст без выдуманного статуса. |
 
 ## 5. Трассировка: требование → тест
 
@@ -181,19 +194,21 @@ JSON Schema инструментов — в [`contracts/mcp/`](contracts/mcp).
 | FR-14 | `tests/test_guardrails.py::test_mask_pii_hides_contacts_and_secrets`, `tests/test_guardrails.py::test_final_answer_is_masked` |
 | FR-15 | `tests/test_guardrails.py::test_chat_rate_limit_returns_429` |
 | FR-16 | `tests/test_demo_scenarios.py::test_next_step_scenario`, `tests/test_evals.py::test_golden_set_passes_in_mock_mode` |
+| FR-17 | `tests/test_history.py::test_agent_sends_previous_turns_to_model`, `tests/test_history.py::test_agent_does_not_remember_risky_or_failed_turns`, `tests/test_history.py::test_store_forgets_old_turns_and_limits_size`, `tests/test_history.py::test_clear_history_endpoint` |
+| FR-18 | `tests/test_handoff.py::test_preview_handoff_builds_local_draft`, `tests/test_handoff.py::test_agent_sends_handoff_only_in_next_turn`, `tests/test_handoff.py::test_mock_offers_handoff_when_nothing_found`, `tests/test_handoff.py::test_mock_explains_when_core_has_no_handoffs`, `tests/test_handoff.py::test_handoff_flow_over_mcp` |
 | Сценарий 1 | `tests/test_demo_scenarios.py::test_next_step_scenario`, `tests/test_mock_provider.py::test_mock_answers_from_plan` |
-| Сценарий 2 | `tests/test_demo_scenarios.py::test_jira_question_scenario`, `tests/test_demo_scenarios.py::test_unknown_question_suggests_mentor`, `tests/test_evals.py::test_golden_set_passes_in_mock_mode` |
+| Сценарий 2 | `tests/test_demo_scenarios.py::test_jira_question_scenario`, `tests/test_demo_scenarios.py::test_unknown_question_suggests_mentor`, `tests/test_handoff.py::test_mock_offers_handoff_when_nothing_found`, `tests/test_real_llm_setup.py::test_stale_warning_added_by_agent`, `tests/test_evals.py::test_golden_set_passes_in_mock_mode` |
 | Сценарий 3 | `tests/test_access.py::test_access_demo_scenario`, `tests/test_access.py::test_mock_separates_access_bundle_from_how_to_question`, `tests/test_access.py::test_access_flow_over_mcp` |
 | Сценарий 4 | `tests/test_absence.py::test_absence_demo_scenario`, `tests/test_absence.py::test_absence_flow_over_mcp`, `tests/test_absence.py::test_find_dates_formats` |
 | Prompt injection | `tests/test_guardrails.py::test_injection_suite_passes_in_mock_mode` |
 
-Наборы evals: [`ai/evals/golden.jsonl`](../../ai/evals/golden.jsonl) (20 кейсов) и
+Наборы evals: [`ai/evals/golden.jsonl`](../../ai/evals/golden.jsonl) (27 кейсов, из них 6 многоходовых) и
 [`ai/evals/injection.jsonl`](../../ai/evals/injection.jsonl) (21 кейс).
 
 ## 6. Non-goals
 
 - Агент не принимает решений за наставника и HR: он только готовит и отправляет заявки.
-- Агент не помнит историю диалога между сообщениями (кроме ожидающего черновика).
+- Нет долгой памяти: история диалога живёт 30 минут в памяти AI-сервиса и не сохраняется в БД.
 - Нет собственного хранилища: все данные — в core, AI-сервис stateless (кроме черновиков в памяти).
 - Нет векторного поиска и эмбеддингов: поиск — через `GET /api/v1/kb/search` core.
 - Не обучаем и не дообучаем модели.

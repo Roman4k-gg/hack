@@ -11,6 +11,9 @@ def build_provider(settings: Settings) -> LLMProvider:
             api_key=settings.llm_api_key,
             model=settings.llm_model,
             timeout=settings.llm_timeout,
+            temperature=settings.llm_temperature,
+            max_tokens=settings.llm_max_tokens,
+            reasoning_effort=settings.llm_reasoning_effort,
         )
     return MockProvider()
 

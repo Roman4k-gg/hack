@@ -28,6 +28,7 @@ uv run uvicorn app.main:app --reload --port 8000
 | ai | GET | `/healthz` | liveness |
 | ai | GET | `/readyz` | готовность, режим LLM, версия промпта |
 | ai | POST | `/api/v1/chat/stream` | SSE-ответ чата, формат — `docs/api-contract.md` §5 |
+| ai | DELETE | `/api/v1/chat/history` | Сбросить историю диалога и черновик |
 | mcp | GET | `/healthz` | liveness |
 | mcp | POST | `/mcp` | MCP Streamable HTTP |
 
@@ -43,6 +44,8 @@ uv run uvicorn app.main:app --reload --port 8000
 | `get_my_requests` | `GET /api/v1/requests` | `request:self` |
 | `preview_access_bundle` | `POST /api/v1/requests/access/preview` | `access:self` |
 | `create_access_requests` | `POST /api/v1/requests/access` | `access:self:write` |
+| `preview_handoff` | — (черновик в AI) | `request:self` |
+| `create_handoff` | `POST /api/v1/handoffs` (ждёт core) | `request:self` |
 
 Действия идут в два шага: `preview_*` возвращает черновик, токен подтверждения агент прячет
 от модели. `create_*` выполняется только в следующем сообщении после явного «да».
@@ -55,8 +58,9 @@ uv run uvicorn app.main:app --reload --port 8000
 | `TOOLS_MODE` | `mcp` — инструменты через MCP-сервер, `direct` — напрямую в core | `mcp` |
 
 Остальные переменные — в `app/config.py`: `CORE_URL`, `MCP_URL`, `JWT_SECRET`, `LLM_MODEL`,
-`LLM_API_KEY`, `LLM_BASE_URL`, `LLM_RETRIES`, `LLM_RETRY_DELAY`, `MAX_TOOL_ITERATIONS`,
-`TOOL_TIMEOUT`, `LOG_LEVEL`, `LOG_JSON`, `RATE_LIMIT_PER_MINUTE`.
+`LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MAX_TOKENS`, `LLM_TEMPERATURE`, `LLM_REASONING_EFFORT`,
+`LLM_RETRIES`, `LLM_RETRY_DELAY`, `MAX_TOOL_ITERATIONS`,
+`TOOL_TIMEOUT`, `LOG_LEVEL`, `LOG_JSON`, `RATE_LIMIT_PER_MINUTE`, `HISTORY_TURNS`, `HISTORY_TTL`.
 
 ## Guardrails
 
@@ -90,8 +94,18 @@ uv run uvicorn app.main:app --reload --port 8000
 ```bash
 uv run python -m evals.run
 uv run python -m evals.run --suite injection
-uv run python -m evals.run --mode real --min-pass 0.8
+uv run python -m evals.ping
+uv run python -m evals.run --mode real --rpm 10 --min-pass 0.8
+uv run python -m evals.run --suite injection --mode real --rpm 10
+uv run python -m evals.run --mode real --only kb-jira,unknown-wifi
 ```
+
+Real LLM: `cp .env.example .env`, вписать `LLM_API_KEY` (шаблон — под Gemini Flash, детали в
+[quickstart](../specs/001-ai-buddy/quickstart.md)). `evals.ping --models` — какие модели доступны
+ключу, `evals.ping` — полный круг «вызов инструмента → ответ по результату». `--rpm` держит
+лимит запросов в минуту бесплатного тарифа, `--only` перепрогоняет выбранные кейсы.
+`evals.run` без `--mode real` всегда идёт в mock, отчёты real-прогона — в `evals/*_real.md`.
+Тесты `.env` не читают.
 
 `evals/injection.jsonl` — 21 кейс атак: через сообщение пользователя, через «отравленные»
 документы, утечки ПДн и секретов, плюс безобидные вопросы против ложных срабатываний.

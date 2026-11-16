@@ -1,9 +1,11 @@
+import os
 import time
 
 import jwt
 import pytest
 
 from app.auth import User
+from app.config import Settings, get_settings
 
 SECRET = "dev-secret-change-me"
 
@@ -33,3 +35,14 @@ def intern() -> User:
         team_id="11111111-1111-1111-1111-111111111111",
         scopes=["onboarding:plan:read", "chat:use", "kb:read"],
     )
+
+
+@pytest.fixture(autouse=True)
+def isolated_settings(monkeypatch):
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+    for name in list(os.environ):
+        if name.upper().startswith("LLM_") or name.upper() == "TOOLS_MODE":
+            monkeypatch.delenv(name)
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
