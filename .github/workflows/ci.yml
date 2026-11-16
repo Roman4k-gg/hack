@@ -102,7 +102,7 @@ jobs:
         run: go test ./... -race -coverprofile=coverage.out -covermode=atomic
 
       - name: Coverage gate
-        run: bash ../scripts/coverage-gate.sh core/coverage.out
+        run: bash ../scripts/coverage-gate.sh coverage.out
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
