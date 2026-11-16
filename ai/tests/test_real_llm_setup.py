@@ -414,3 +414,31 @@ def test_evals_only_runs_selected_cases_with_rpm(tmp_path: Path, monkeypatch):
 
     text = report.read_text(encoding="utf-8")
     assert "`a`" in text and "`c`" in text and "`b`" not in text
+
+
+class SearchThenHandoff:
+    name = "search-then-handoff"
+
+    def __init__(self) -> None:
+        self.turn = 0
+
+    async def complete(self, messages, tools):
+        self.turn += 1
+        if self.turn == 1:
+            call = ToolCall(id="s1", name="search_knowledge", arguments={"query": "VPN"})
+            return LLMResponse(tool_calls=[call])
+        if self.turn == 2:
+            call = ToolCall(id="h1", name="preview_handoff", arguments={"question": "Как VPN?"})
+            return LLMResponse(tool_calls=[call])
+        return LLMResponse(text="В базе нет инструкции. Передать вопрос наставнику?")
+
+
+async def test_no_citations_when_question_goes_to_mentor():
+    user = User(id="u", role="intern", token="t", scopes=["kb:read", "request:self"])
+    agent = Agent(SearchThenHandoff(), stale_core(stale=True))
+
+    events = [event async for event in agent.run(user, "Как настроить VPN?")]
+
+    assert [event for event in events if event["type"] == "citation"] == []
+    text = "".join(event["text"] for event in events if event["type"] == "delta")
+    assert text == "В базе нет инструкции. Передать вопрос наставнику?"

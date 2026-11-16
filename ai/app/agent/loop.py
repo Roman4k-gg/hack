@@ -202,6 +202,7 @@ class Agent:
             {"role": "user", "content": message},
         ]
         citations: dict[str, dict[str, Any]] = {}
+        handoff_offered = False
         call_counter = 0
 
         for _ in range(self.max_iterations):
@@ -213,12 +214,13 @@ class Agent:
                 return
 
             if not response.tool_calls:
-                answer = with_stale_warning(mask_pii(response.text), citations)
+                sources = {} if handoff_offered else citations
+                answer = with_stale_warning(mask_pii(response.text), sources)
                 if not run.input_flags and not tainted:
                     self.history.add(user.id, mask_pii(message), answer)
                 async for event in self._stream_text(answer):
                     yield event
-                for item in citations.values():
+                for item in sources.values():
                     yield sse.citation(item["id"], item["title"], item.get("url", ""))
                 run.finish("ok")
                 yield sse.done()
@@ -240,6 +242,8 @@ class Agent:
                     run.tool_flags.extend(flag for flag in flags if flag not in run.tool_flags)
                 run.add_tool(call.name, result.ok, result.error_code, started)
                 yield sse.tool_call(call_id, call.name, "success" if result.ok else "error")
+                if call.name == "preview_handoff" and result.ok:
+                    handoff_offered = True
                 for item in result.citations:
                     citations[item["id"]] = item
                 messages.append(
