@@ -1,3 +1,4 @@
+# ВИДЕО https://drive.google.com/drive/folders/1hgAIrzocxrF4AwnjAQhkWU0HCPswhjNn
 # AI-buddy
 
 ИИ-наставник для стажёров (кейс Авито, хакатон Hack&Change 2026).
