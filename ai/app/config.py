@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     prompt_version: str = "v1"
     log_level: str = "info"
     log_json: bool = True
+    rate_limit_per_minute: int = 20
 
 
 @lru_cache

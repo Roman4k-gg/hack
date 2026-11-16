@@ -12,6 +12,9 @@ from app.agent.prompts import build_system_message
 from app.agent.run_log import AgentRun
 from app.agent.tools import Tool, ToolBackend, ToolResult
 from app.auth import User
+from app.guardrails.injection import INJECTION_NOTE, find_injection
+from app.guardrails.output import sanitize_result
+from app.guardrails.pii import mask_pii
 from app.providers.base import LLMError, LLMProvider, LLMResponse, ToolCall, ToolSpec
 
 LIMIT_TEXT = (
@@ -24,6 +27,10 @@ CONFIRMATION_REQUIRED_TEXT = (
     "пока пользователь явно подтвердит его в следующем сообщении."
 )
 RETRYABLE_CODES = {"TIMEOUT", "UPSTREAM_ERROR"}
+TAINTED_TEXT = (
+    "Действие заблокировано: в данных этого ответа нашлась подозрительная инструкция. "
+    "Действия выполняются только по прямой просьбе пользователя."
+)
 
 
 def chunk_text(text: str, words_per_chunk: int = 3) -> list[str]:
@@ -104,9 +111,19 @@ class Agent:
         ]
 
     async def _call_tool(
-        self, call: ToolCall, user: User, tools: dict[str, Tool], turn_id: str
+        self,
+        call: ToolCall,
+        user: User,
+        tools: dict[str, Tool],
+        turn_id: str,
+        tainted: bool = False,
     ) -> ToolResult:
         tool = tools.get(call.name)
+        is_action = tool is not None and (tool.requires_confirmation or bool(tool.confirmed_by))
+        if tainted and is_action:
+            return ToolResult(
+                ok=False, error_code="INJECTION_SUSPECTED", error_message=TAINTED_TEXT
+            )
         if tool is not None and tool.requires_confirmation:
             action = self.pending.get(user.id)
             if action is None or action.tool != call.name or action.turn_id == turn_id:
@@ -160,13 +177,13 @@ class Agent:
         tools = {tool.name: tool for tool in self.registry.available(user)}
         specs = [tool.spec for tool in tools.values()]
         turn_id = uuid.uuid4().hex
+        run.input_flags = find_injection(message)
+        extra = self._pending_context(user)
+        if run.input_flags:
+            extra.append(INJECTION_NOTE)
+        tainted = False
         messages: list[dict[str, Any]] = [
-            build_system_message(
-                user,
-                self.prompt_version,
-                today=self.today(),
-                extra=self._pending_context(user),
-            ),
+            build_system_message(user, self.prompt_version, today=self.today(), extra=extra),
             {"role": "user", "content": message},
         ]
         citations: dict[str, dict[str, str]] = {}
@@ -181,7 +198,7 @@ class Agent:
                 return
 
             if not response.tool_calls:
-                async for event in self._stream_text(response.text):
+                async for event in self._stream_text(mask_pii(response.text)):
                     yield event
                 for item in citations.values():
                     yield sse.citation(item["id"], item["title"], item.get("url", ""))
@@ -198,7 +215,11 @@ class Agent:
             for call_id, call in calls:
                 yield sse.tool_call(call_id, call.name, "running")
                 started = run.clock()
-                result = await self._call_tool(call, user, tools, turn_id)
+                result = await self._call_tool(call, user, tools, turn_id, tainted)
+                result, flags = sanitize_result(result)
+                if flags:
+                    tainted = True
+                    run.tool_flags.extend(flag for flag in flags if flag not in run.tool_flags)
                 run.add_tool(call.name, result.ok, result.error_code, started)
                 yield sse.tool_call(call_id, call.name, "success" if result.ok else "error")
                 for item in result.citations:
