@@ -1,10 +1,11 @@
+import json
 import re
 from pathlib import Path
 
 from app.agent.prompts import PROMPTS_DIR
 from app.agent.tools import DEFAULT_TOOLS
 from app.config import Settings
-from evals.export_contracts import MCP_DIR, SPEC_DIR, build_contracts, main
+from evals.export_contracts import CORE_CALLS, MCP_DIR, SPEC_DIR, build_contracts, main
 
 AI_DIR = Path(__file__).resolve().parents[1]
 SPEC = SPEC_DIR / "spec.md"
@@ -75,5 +76,14 @@ async def test_mcp_contracts_match_code():
 
 def test_export_contracts_writes_files(tmp_path: Path, capsys):
     assert main(tmp_path / "mcp") == 0
-    assert len(list((tmp_path / "mcp").glob("*.json"))) == len(DEFAULT_TOOLS)
+    assert len(list((tmp_path / "mcp").glob("*.json"))) == len(DEFAULT_TOOLS) + 1
     assert "contracts written" in capsys.readouterr().out
+
+
+def test_tools_index_covers_every_tool():
+    assert set(CORE_CALLS) == {tool.name for tool in DEFAULT_TOOLS}
+    index = json.loads((MCP_DIR / "tools.json").read_text(encoding="utf-8"))
+    assert [tool["name"] for tool in index["tools"]] == [tool.name for tool in DEFAULT_TOOLS]
+    handoff = next(tool for tool in index["tools"] if tool["name"] == "create_handoff")
+    assert handoff["calls"] == {"method": "POST", "path": "/api/v1/handoffs"}
+    assert handoff["requiresConfirmation"] is True

@@ -1,7 +1,7 @@
 # REST-контракты
 
 Источник истины по REST — [`docs/api-contract.md`](../../../docs/api-contract.md) (ведёт Рома).
-Отдельный `rest.yaml` не дублируем, чтобы не было двух версий правды.
+Машинно-читаемая выжимка API core — [`rest.yaml`](rest.yaml) (OpenAPI, тоже ведёт Рома).
 
 ## Что отдаёт AI-сервис (`ai`, порт 8000)
 
@@ -58,5 +58,7 @@
 Каждый инструмент MCP возвращает `{"ok": true, "result": ..., "citations": [...]}` или
 `{"ok": false, "error": {"code", "message"}, "citations": []}`. JSON Schema аргументов —
 в [`mcp/`](mcp): `llm_parameters` видит модель, `mcp_input_schema` принимает MCP-сервер.
+[`mcp/tools.json`](mcp/tools.json) — сводка всех инструментов: скоуп, только чтение или запись,
+нужно ли подтверждение, схема входа и какой запрос в core делает инструмент.
 Файлы генерируются из кода командой `uv run python -m evals.export_contracts`, тест
 `ai/tests/test_specs.py` падает, если они разошлись с кодом.

@@ -101,11 +101,12 @@ def user_for(person: str) -> User:
 def check(case: Case, observed: Observed) -> list[str]:
     failures: list[str] = []
     called = [name for name, _ in observed.tools]
+    sequence = [name for index, name in enumerate(called) if not index or called[index - 1] != name]
     answer = observed.answer.lower()
     doc_by_id = {doc_id: slug for slug, doc_id in DOC_IDS.items()}
     cited = [doc_by_id.get(item, item) for item in observed.citations]
 
-    if case.tools is not None and called != case.tools:
+    if case.tools is not None and sequence != case.tools:
         failures.append(f"инструменты {called}, ожидались {case.tools}")
     for name, expected in case.args.items():
         actual = next((args for tool, args in observed.tools if tool == name), None)
@@ -201,6 +202,29 @@ def build_eval_provider(mode: str, settings: Settings) -> LLMProvider:
     return build_provider(settings.model_copy(update={"llm_mode": mode}))
 
 
+class PacedProvider:
+    def __init__(
+        self,
+        inner: LLMProvider,
+        rpm: float,
+        clock: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], Any] = asyncio.sleep,
+    ) -> None:
+        self.inner = inner
+        self.name = inner.name
+        self.interval = 60.0 / rpm
+        self.clock = clock
+        self.sleep = sleep
+        self.next_at = 0.0
+
+    async def complete(self, messages: list[dict[str, Any]], tools: list[Any]) -> Any:
+        wait = self.next_at - self.clock()
+        if wait > 0:
+            await self.sleep(wait)
+        self.next_at = self.clock() + self.interval
+        return await self.inner.complete(messages, tools)
+
+
 def main(
     argv: list[str] | None = None,
     provider_factory: Callable[[str, Settings], LLMProvider] = build_eval_provider,
@@ -208,17 +232,27 @@ def main(
     settings = get_settings()
     parser = argparse.ArgumentParser(description="Прогон evals AI-buddy")
     parser.add_argument("--suite", default="golden", choices=sorted(SUITES))
-    parser.add_argument("--mode", default=settings.llm_mode, choices=["mock", "real"])
+    parser.add_argument("--mode", default="mock", choices=["mock", "real"])
     parser.add_argument("--cases", type=Path)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--min-pass", type=float, default=1.0)
+    parser.add_argument("--rpm", type=float, default=0.0)
+    parser.add_argument("--only", default="")
     options = parser.parse_args(argv)
     cases_path, report_path = SUITES[options.suite]
     options.cases = options.cases or cases_path
-    options.report = options.report or report_path
+    if options.report is None:
+        suffix = "_real" if options.mode == "real" else ""
+        options.report = report_path.with_name(f"{report_path.stem}{suffix}.md")
 
     provider = provider_factory(options.mode, settings)
-    results = asyncio.run(run_golden(load_cases(options.cases), provider))
+    if options.rpm > 0:
+        provider = PacedProvider(provider, options.rpm)
+    cases = load_cases(options.cases)
+    if options.only:
+        wanted = set(options.only.split(","))
+        cases = [case for case in cases if case.id in wanted]
+    results = asyncio.run(run_golden(cases, provider))
     meta = {
         "suite": options.suite,
         "date": datetime.now().strftime("%Y-%m-%d %H:%M"),

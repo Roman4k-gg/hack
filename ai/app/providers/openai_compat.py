@@ -18,6 +18,32 @@ def _parse_arguments(raw: Any) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
+STANDARD_CALL_FIELDS = ("id", "type", "function")
+ERROR_DETAIL_LIMIT = 200
+
+
+def _error_detail(response: httpx.Response) -> str:
+    try:
+        data = response.json()
+    except ValueError:
+        return ""
+    if isinstance(data, list) and data:
+        data = data[0]
+    error = data.get("error") if isinstance(data, dict) else None
+    message = error.get("message") if isinstance(error, dict) else error
+    return " ".join(str(message).split())[:ERROR_DETAIL_LIMIT] if message else ""
+
+
+def _tool_call(call: dict[str, Any]) -> ToolCall:
+    function = call.get("function") or {}
+    return ToolCall(
+        id=call.get("id") or "",
+        name=function.get("name", ""),
+        arguments=_parse_arguments(function.get("arguments")),
+        extra={key: value for key, value in call.items() if key not in STANDARD_CALL_FIELDS},
+    )
+
+
 class OpenAICompatProvider:
     name = "openai"
 
@@ -29,6 +55,7 @@ class OpenAICompatProvider:
         timeout: float = 30.0,
         temperature: float = 0.2,
         max_tokens: int = 800,
+        reasoning_effort: str = "",
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
@@ -37,6 +64,7 @@ class OpenAICompatProvider:
         self.timeout = timeout
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.reasoning_effort = reasoning_effort
         self._client = client
 
     def _payload(self, messages: list[dict[str, Any]], tools: list[ToolSpec]) -> dict[str, Any]:
@@ -46,6 +74,8 @@ class OpenAICompatProvider:
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
         }
+        if self.reasoning_effort:
+            payload["reasoning_effort"] = self.reasoning_effort
         if tools:
             payload["tools"] = [tool.to_openai() for tool in tools]
             payload["tool_choice"] = "auto"
@@ -71,7 +101,9 @@ class OpenAICompatProvider:
 
         if response.status_code >= 400:
             retryable = response.status_code == 429 or response.status_code >= 500
-            raise LLMError(f"LLM вернула ошибку {response.status_code}", retryable=retryable)
+            detail = _error_detail(response)
+            message = f"LLM вернула ошибку {response.status_code}"
+            raise LLMError(f"{message}: {detail}" if detail else message, retryable=retryable)
 
         try:
             data = response.json()
@@ -79,14 +111,7 @@ class OpenAICompatProvider:
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise LLMError("LLM вернула некорректный ответ") from exc
 
-        tool_calls = [
-            ToolCall(
-                id=call.get("id", ""),
-                name=call.get("function", {}).get("name", ""),
-                arguments=_parse_arguments(call.get("function", {}).get("arguments")),
-            )
-            for call in message.get("tool_calls") or []
-        ]
+        tool_calls = [_tool_call(call) for call in message.get("tool_calls") or []]
         usage = data.get("usage") or {}
         return LLMResponse(
             text=message.get("content") or "",

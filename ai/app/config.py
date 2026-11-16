@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     llm_timeout: float = 30.0
     llm_retries: int = 1
     llm_retry_delay: float = 0.5
+    llm_max_tokens: int = 800
+    llm_temperature: float = 0.2
+    llm_reasoning_effort: str = ""
 
     tools_mode: str = "mcp"
     mcp_url: str = "http://localhost:8001/mcp"

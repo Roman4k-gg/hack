@@ -1,57 +1,109 @@
 {
   "version": "1.0",
+  "generated_from": "ai/app",
   "tools": [
     {
       "name": "get_my_profile",
-      "description": "Профиль текущего пользователя: роль, команда, наставник.",
-      "scope": "profile:self",
+      "description": "Профиль текущего пользователя: имя, роль, команда, должность.",
+      "scope": null,
       "readOnly": true,
-      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false},
-      "calls": {"method": "GET", "path": "/api/v1/me"}
+      "destructive": false,
+      "requiresConfirmation": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "title": "get_my_profileArguments"
+      },
+      "calls": {
+        "method": "GET",
+        "path": "/api/v1/me"
+      }
     },
     {
       "name": "get_onboarding_plan",
-      "description": "План адаптации стажёра: этапы, пункты, прогресс, следующий шаг.",
+      "description": "Карта адаптации стажёра: этапы, пункты и их статусы, прогресс и следующий шаг. Используй, когда спрашивают, что делать дальше.",
       "scope": "onboarding:plan:read",
       "readOnly": true,
-      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false},
-      "calls": {"method": "GET", "path": "/api/v1/onboarding/plan"}
+      "destructive": false,
+      "requiresConfirmation": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "title": "get_onboarding_planArguments"
+      },
+      "calls": {
+        "method": "GET",
+        "path": "/api/v1/onboarding/plan"
+      }
     },
     {
       "name": "search_knowledge",
-      "description": "Поиск по базе знаний команды с учётом прав. Возвращает цитаты со ссылками.",
-      "scope": "kb:read*",
+      "description": "Поиск по базе знаний команды: доступы, инструменты, процессы, отгулы. Возвращает документы с цитатой, ссылкой и датой обновления. В query передавай короткий запрос из ключевых слов, например «доступ Jira».",
+      "scope": "kb:read",
       "readOnly": true,
-      "inputSchema": {
-        "type": "object",
-        "properties": {"query": {"type": "string", "minLength": 2}, "limit": {"type": "integer", "maximum": 20}},
-        "required": ["query"],
-        "additionalProperties": false
-      },
-      "calls": {"method": "GET", "path": "/api/v1/kb/search"}
-    },
-    {
-      "name": "preview_absence_request",
-      "description": "Готовит черновик заявки на отгул и возвращает одноразовый токен подтверждения. Ничего не создаёт.",
-      "scope": "absence:self",
-      "readOnly": false,
       "destructive": false,
+      "requiresConfirmation": false,
       "inputSchema": {
         "type": "object",
         "properties": {
-          "date_from": {"type": "string", "format": "date"},
-          "date_to": {"type": "string", "format": "date"},
-          "absence_type": {"type": "string", "enum": ["vacation", "day_off", "sick_leave"]},
-          "comment": {"type": "string", "maxLength": 500}
+          "query": {
+            "title": "Query",
+            "type": "string"
+          }
         },
-        "required": ["date_from", "date_to", "absence_type"],
-        "additionalProperties": false
+        "required": [
+          "query"
+        ],
+        "title": "search_knowledgeArguments"
       },
-      "calls": {"method": "POST", "path": "/api/v1/requests/absence/preview"}
+      "calls": {
+        "method": "GET",
+        "path": "/api/v1/kb/search"
+      }
+    },
+    {
+      "name": "preview_absence_request",
+      "description": "Готовит черновик заявки на отгул, отпуск или больничный и показывает правила. Заявку НЕ создаёт. После черновика попроси пользователя явно подтвердить.",
+      "scope": "absence:self",
+      "readOnly": true,
+      "destructive": false,
+      "requiresConfirmation": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "date_from": {
+            "title": "Date From",
+            "type": "string"
+          },
+          "date_to": {
+            "default": "",
+            "title": "Date To",
+            "type": "string"
+          },
+          "absence_type": {
+            "default": "day_off",
+            "title": "Absence Type",
+            "type": "string"
+          },
+          "comment": {
+            "default": "",
+            "title": "Comment",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date_from"
+        ],
+        "title": "preview_absence_requestArguments"
+      },
+      "calls": {
+        "method": "POST",
+        "path": "/api/v1/requests/absence/preview"
+      }
     },
     {
       "name": "create_absence_request",
-      "description": "Создаёт заявку на отгул по подтверждённому preview.",
+      "description": "Отправляет заявку на отсутствие по последнему черновику. Вызывай только если пользователь в новом сообщении явно подтвердил черновик. Аргументы не нужны.",
       "scope": "absence:self:write",
       "readOnly": false,
       "destructive": false,
@@ -59,31 +111,57 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "preview_id": {"type": "string", "format": "uuid"},
-          "confirmation_token": {"type": "string"},
-          "idempotency_key": {"type": "string", "format": "uuid"}
+          "preview_id": {
+            "title": "Preview Id",
+            "type": "string"
+          },
+          "confirmation_token": {
+            "title": "Confirmation Token",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "title": "Idempotency Key",
+            "type": "string"
+          }
         },
-        "required": ["preview_id", "confirmation_token", "idempotency_key"],
-        "additionalProperties": false
+        "required": [
+          "preview_id",
+          "confirmation_token",
+          "idempotency_key"
+        ],
+        "title": "create_absence_requestArguments"
       },
-      "calls": {"method": "POST", "path": "/api/v1/requests/absence"}
+      "calls": {
+        "method": "POST",
+        "path": "/api/v1/requests/absence"
+      }
     },
     {
       "name": "preview_access_bundle",
-      "description": "Пакет доступов по роли: системы, причины и согласующие.",
+      "description": "Готовит черновик пакета доступов для роли (VPN, Jira, база знаний и т.д.): какие системы, зачем и кто согласует. Заявки НЕ создаёт. После черновика попроси пользователя явно подтвердить.",
       "scope": "access:self",
       "readOnly": true,
+      "destructive": false,
+      "requiresConfirmation": false,
       "inputSchema": {
         "type": "object",
-        "properties": {"bundle": {"type": "string", "enum": ["intern", "mentor"]}},
-        "required": ["bundle"],
-        "additionalProperties": false
+        "properties": {
+          "bundle": {
+            "default": "intern",
+            "title": "Bundle",
+            "type": "string"
+          }
+        },
+        "title": "preview_access_bundleArguments"
       },
-      "calls": {"method": "POST", "path": "/api/v1/requests/access/preview"}
+      "calls": {
+        "method": "POST",
+        "path": "/api/v1/requests/access/preview"
+      }
     },
     {
       "name": "create_access_requests",
-      "description": "Создаёт заявки на доступы по подтверждённому пакету.",
+      "description": "Отправляет заявки на доступы по последнему черновику пакета. Вызывай только если пользователь в новом сообщении явно подтвердил черновик. Аргументы не нужны.",
       "scope": "access:self:write",
       "readOnly": false,
       "destructive": false,
@@ -91,28 +169,130 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "preview_id": {"type": "string", "format": "uuid"},
-          "confirmation_token": {"type": "string"},
-          "idempotency_key": {"type": "string", "format": "uuid"}
+          "preview_id": {
+            "title": "Preview Id",
+            "type": "string"
+          },
+          "confirmation_token": {
+            "title": "Confirmation Token",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "title": "Idempotency Key",
+            "type": "string"
+          }
         },
-        "required": ["preview_id", "confirmation_token", "idempotency_key"],
-        "additionalProperties": false
+        "required": [
+          "preview_id",
+          "confirmation_token",
+          "idempotency_key"
+        ],
+        "title": "create_access_requestsArguments"
       },
-      "calls": {"method": "POST", "path": "/api/v1/requests/access"}
+      "calls": {
+        "method": "POST",
+        "path": "/api/v1/requests/access"
+      }
     },
     {
-      "name": "get_request_status",
-      "description": "Статус заявки и история её изменений.",
+      "name": "get_my_requests",
+      "description": "Список заявок пользователя (отгулы, доступы) с их статусами.",
       "scope": "request:self",
       "readOnly": true,
+      "destructive": false,
+      "requiresConfirmation": false,
       "inputSchema": {
         "type": "object",
-        "properties": {"request_id": {"type": "string", "format": "uuid"}},
-        "required": ["request_id"],
-        "additionalProperties": false
+        "properties": {},
+        "title": "get_my_requestsArguments"
       },
-      "calls": {"method": "GET", "path": "/api/v1/requests/{id}"}
+      "calls": {
+        "method": "GET",
+        "path": "/api/v1/requests"
+      }
+    },
+    {
+      "name": "preview_handoff",
+      "description": "Готовит черновик вопроса наставнику, когда ответа нет в базе знаний или пользователь просит передать вопрос. Ничего не отправляет. После черновика попроси пользователя явно подтвердить.",
+      "scope": "request:self",
+      "readOnly": true,
+      "destructive": false,
+      "requiresConfirmation": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "context": {
+            "default": "",
+            "title": "Context",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "preview_handoffArguments"
+      },
+      "calls": null
+    },
+    {
+      "name": "create_handoff",
+      "description": "Отправляет наставнику вопрос из последнего черновика. Вызывай только если пользователь в новом сообщении явно подтвердил. Аргументы не нужны.",
+      "scope": "request:self",
+      "readOnly": false,
+      "destructive": false,
+      "requiresConfirmation": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "context": {
+            "default": "",
+            "title": "Context",
+            "type": "string"
+          },
+          "preview_id": {
+            "default": "",
+            "title": "Preview Id",
+            "type": "string"
+          },
+          "confirmation_token": {
+            "default": "",
+            "title": "Confirmation Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question",
+          "idempotency_key"
+        ],
+        "title": "create_handoffArguments"
+      },
+      "calls": {
+        "method": "POST",
+        "path": "/api/v1/handoffs"
+      }
     }
   ],
-  "errors": ["FORBIDDEN", "NOT_FOUND", "VALIDATION_ERROR", "CONFLICT", "UPSTREAM_ERROR", "TIMEOUT"]
+  "errors": [
+    "UNAUTHORIZED",
+    "FORBIDDEN",
+    "NOT_FOUND",
+    "VALIDATION_ERROR",
+    "CONFLICT",
+    "TIMEOUT",
+    "UPSTREAM_ERROR",
+    "CONFIRMATION_REQUIRED",
+    "INJECTION_SUSPECTED"
+  ]
 }

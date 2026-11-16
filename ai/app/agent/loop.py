@@ -23,6 +23,7 @@ LIMIT_TEXT = (
     "Попробуй переформулировать вопрос или спроси наставника."
 )
 LLM_ERROR_TEXT = "AI-модель сейчас недоступна. Попробуй ещё раз чуть позже."
+STALE_TEXT = "⚠️ Документ давно не обновлялся — информация может быть устаревшей."
 CONFIRMATION_REQUIRED_TEXT = (
     "Нет подтверждённого черновика. Сначала подготовь черновик и дождись, "
     "пока пользователь явно подтвердит его в следующем сообщении."
@@ -42,6 +43,13 @@ def chunk_text(text: str, words_per_chunk: int = 3) -> list[str]:
     ]
 
 
+def with_stale_warning(answer: str, citations: dict[str, dict[str, Any]]) -> str:
+    stale = any(item.get("stale") for item in citations.values())
+    if not stale or "устарев" in answer.lower():
+        return answer
+    return f"{answer.rstrip()}\n\n{STALE_TEXT}"
+
+
 def assistant_tool_message(text: str, calls: list[tuple[str, ToolCall]]) -> dict[str, Any]:
     return {
         "role": "assistant",
@@ -54,6 +62,7 @@ def assistant_tool_message(text: str, calls: list[tuple[str, ToolCall]]) -> dict
                     "name": call.name,
                     "arguments": json.dumps(call.arguments, ensure_ascii=False),
                 },
+                **call.extra,
             }
             for call_id, call in calls
         ],
@@ -192,7 +201,7 @@ class Agent:
             *previous,
             {"role": "user", "content": message},
         ]
-        citations: dict[str, dict[str, str]] = {}
+        citations: dict[str, dict[str, Any]] = {}
         call_counter = 0
 
         for _ in range(self.max_iterations):
@@ -204,7 +213,7 @@ class Agent:
                 return
 
             if not response.tool_calls:
-                answer = mask_pii(response.text)
+                answer = with_stale_warning(mask_pii(response.text), citations)
                 if not run.input_flags and not tainted:
                     self.history.add(user.id, mask_pii(message), answer)
                 async for event in self._stream_text(answer):

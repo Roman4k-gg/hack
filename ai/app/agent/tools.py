@@ -251,7 +251,13 @@ async def search_knowledge(user: User, args: dict[str, Any], core: CoreClient) -
     if items:
         items[0] = await with_full_text(items[0], user, core)
     citations = [
-        {"id": item["document_id"], "title": item["title"], "url": item["url"]} for item in items
+        {
+            "id": item["document_id"],
+            "title": item["title"],
+            "url": item["url"],
+            **({"stale": True} if item["stale"] else {}),
+        }
+        for item in items
     ]
     return ToolResult(ok=True, data={"query": query, "items": items}, citations=citations)
 
