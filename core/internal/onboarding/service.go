@@ -395,9 +395,14 @@ func NewService(store PlanStore, recorder *audit.Recorder, logger *slog.Logger) 
 }
 
 func (s *Service) Plan(ctx context.Context, userID string) (Plan, error) {
+	if s == nil || s.store == nil {
+		return Plan{}, fmt.Errorf("onboarding: service is not initialised")
+	}
+
 	if userID == "" {
 		return Plan{}, ErrPlanNotFound
 	}
+
 	return s.store.PlanByUserID(ctx, userID)
 }
 
@@ -422,6 +427,10 @@ func (s *Service) UpdateItem(ctx context.Context, principal reqctx.Principal, it
 
 	if !canEdit(principal, current.OwnerID) {
 		return Item{}, ErrForbidden
+	}
+
+	if current.Status == status && current.BlockedReason == blockedReason {
+		return current, nil
 	}
 
 	updated, err := s.store.UpdateItemStatus(ctx, itemID, status, blockedReason)

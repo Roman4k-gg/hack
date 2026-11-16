@@ -1,0 +1,696 @@
+openapi: 3.1.0
+info:
+  title: AI-buddy Core API
+  version: "1.0"
+  description: |
+    Контракт между фронтендом, AI-сервисом и MCP.
+
+    Полное описание полей, кодов ошибок и правил доступа — в `docs/api-contract.md`.
+    Этот файл — машинно-читаемая выжимка: схемы, пути, коды ответов.
+servers:
+  - url: http://localhost:8081/api/v1
+    description: core напрямую
+  - url: http://localhost:3000/api/v1
+    description: через nginx (как ходит фронтенд)
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/login:
+    post:
+      security: []
+      summary: Mock-логин по email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: {type: string, format: email}
+      responses:
+        "200":
+          description: JWT и профиль
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/LoginResponse"}
+        "400": {$ref: "#/components/responses/ValidationError"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+
+  /me:
+    get:
+      summary: Профиль текущего пользователя со скоупами
+      responses:
+        "200":
+          description: Профиль
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/User"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+
+  /onboarding/plan:
+    get:
+      summary: Карта адаптации текущего стажёра
+      responses:
+        "200":
+          description: План с этапами, пунктами и следующим шагом
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Plan"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+
+  /onboarding/items/{id}:
+    patch:
+      summary: Смена статуса пункта
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [pending, in_progress, done, blocked, skipped]
+                blocked_reason: {type: string, maxLength: 500}
+      responses:
+        "200":
+          description: Обновлённый пункт
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Item"}
+        "400": {$ref: "#/components/responses/ValidationError"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+
+  /kb/search:
+    get:
+      summary: Поиск по базе знаний с ACL
+      parameters:
+        - {name: q, in: query, required: true, schema: {type: string}}
+        - {name: limit, in: query, schema: {type: integer, maximum: 20, default: 10}}
+      responses:
+        "200":
+          description: Найденные документы
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: "#/components/schemas/KbItem"}
+                  total: {type: integer}
+        "403": {$ref: "#/components/responses/Forbidden"}
+
+  /kb/documents/{id}:
+    get:
+      summary: Документ целиком
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: Документ
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/KbDocument"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+
+  /team/interns:
+    get:
+      summary: Стажёры команды с метриками
+      responses:
+        "200":
+          description: Список и сводка
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TeamReport"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+
+  /team/interns/{id}/plan:
+    get:
+      summary: План адаптации стажёра для наставника, руководителя и HR
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: План стажёра в формате как у /onboarding/plan
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Plan"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+
+  /requests/absence/preview:
+    post:
+      summary: Черновик заявки на отгул с токеном подтверждения
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date_from, date_to, absence_type]
+              properties:
+                date_from: {type: string, format: date}
+                date_to: {type: string, format: date}
+                absence_type: {type: string, enum: [vacation, day_off, sick_leave]}
+                comment: {type: string, maxLength: 500}
+      responses:
+        "200":
+          description: Черновик и одноразовый токен
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Preview"}
+        "400": {$ref: "#/components/responses/ValidationError"}
+
+  /requests/absence:
+    post:
+      summary: Создание заявки по подтверждённому черновику
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [preview_id, confirmation_token, idempotency_key]
+              properties:
+                preview_id: {type: string, format: uuid}
+                confirmation_token: {type: string}
+                idempotency_key: {type: string, format: uuid}
+      responses:
+        "200":
+          description: Созданная заявка
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/RequestDetail"}
+        "400": {$ref: "#/components/responses/ValidationError"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+
+  /requests/access/preview:
+    post:
+      summary: Пакет доступов по роли
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bundle: {type: string, enum: [intern, mentor]}
+      responses:
+        "200":
+          description: Пакет и токен подтверждения
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AccessPreview"}
+        "404": {$ref: "#/components/responses/NotFound"}
+
+  /requests/access:
+    post:
+      summary: Создание заявок на доступы
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [preview_id, confirmation_token, idempotency_key]
+              properties:
+                preview_id: {type: string, format: uuid}
+                confirmation_token: {type: string}
+                idempotency_key: {type: string, format: uuid}
+      responses:
+        "200":
+          description: Созданные заявки
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requests:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        request_id: {type: string}
+                        system: {type: string}
+                        status: {type: string}
+                        external_id: {type: string}
+                  next_step: {type: string}
+
+  /requests:
+    get:
+      summary: Мои заявки
+      responses:
+        "200":
+          description: Список заявок
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: "#/components/schemas/RequestItem"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+
+  /requests/{id}:
+    get:
+      summary: Заявка с историей статусов
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: Детали заявки
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/RequestDetail"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+
+  /chat/stream:
+    post:
+      summary: SSE-поток ответа AI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message: {type: string, maxLength: 4000}
+      responses:
+        "200":
+          description: Поток SSE-событий
+          content:
+            text/event-stream:
+              schema: {type: string}
+        "429": {$ref: "#/components/responses/RateLimited"}
+        "502": {$ref: "#/components/responses/UpstreamError"}
+        "503": {$ref: "#/components/responses/Unavailable"}
+        "504": {$ref: "#/components/responses/Timeout"}
+
+  /analytics/top-questions:
+    get:
+      summary: Топ вопросов команды
+      responses:
+        "200":
+          description: Вопросы и частота
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    question: {type: string}
+                    count: {type: integer}
+
+  /analytics/content-gaps:
+    get:
+      summary: Темы без ответа в базе знаний
+      responses:
+        "200":
+          description: Контентные дыры
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    topic: {type: string}
+                    questions: {type: integer}
+                    reason: {type: string, enum: [missing, outdated]}
+
+  /admin/feature-flags:
+    get:
+      summary: Реестр фиче-флагов
+      responses:
+        "200":
+          description: Флаги
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "#/components/schemas/Flag"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+
+  /admin/feature-flags/{key}:
+    patch:
+      summary: Включение или выключение флага
+      parameters:
+        - {name: key, in: path, required: true, schema: {type: string}}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled: {type: boolean}
+                rollout: {type: integer, minimum: 0, maximum: 100}
+      responses:
+        "200":
+          description: Обновлённый флаг
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Flag"}
+        "400": {$ref: "#/components/responses/ValidationError"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id: {type: string}
+        email: {type: string}
+        full_name: {type: string}
+        role: {type: string, enum: [intern, mentor, manager, hr, admin]}
+        position: {type: string}
+        team_id: {type: string}
+        team_name: {type: string}
+        team_slug: {type: string}
+        mentor_id: {type: string}
+        mentor_name: {type: string}
+        scopes:
+          type: array
+          items: {type: string}
+
+    LoginResponse:
+      type: object
+      properties:
+        token: {type: string}
+        token_type: {type: string, example: Bearer}
+        expires_at: {type: string, format: date-time}
+        user: {$ref: "#/components/schemas/User"}
+
+    Item:
+      type: object
+      properties:
+        id: {type: string}
+        stage_id: {type: string}
+        title: {type: string}
+        description: {type: string}
+        kind: {type: string, enum: [task, doc, meeting, access]}
+        status: {type: string, enum: [pending, in_progress, done, blocked, skipped]}
+        blocked_reason: {type: string}
+        due_on: {type: string, format: date-time}
+        position: {type: integer}
+        completed_at: {type: string, format: date-time}
+
+    Plan:
+      type: object
+      properties:
+        id: {type: string}
+        title: {type: string}
+        starts_on: {type: string, format: date-time}
+        stages:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {type: string}
+              title: {type: string}
+              description: {type: string}
+              position: {type: integer}
+              items:
+                type: array
+                items: {$ref: "#/components/schemas/Item"}
+        progress:
+          type: object
+          properties:
+            done: {type: integer}
+            total: {type: integer}
+            percent: {type: integer}
+        next_step:
+          type: object
+          nullable: true
+          properties:
+            item_id: {type: string}
+            title: {type: string}
+            reason: {type: string}
+        intern:
+          type: object
+          properties:
+            id: {type: string}
+            full_name: {type: string}
+            team_name: {type: string}
+            position: {type: string}
+
+    KbItem:
+      type: object
+      properties:
+        document_id: {type: string}
+        title: {type: string}
+        summary: {type: string}
+        url: {type: string}
+        team: {type: string}
+        owner: {type: string}
+        updated_at: {type: string, format: date-time}
+        stale: {type: boolean}
+        score: {type: number}
+        chunk: {type: string}
+
+    KbDocument:
+      type: object
+      properties:
+        document_id: {type: string}
+        title: {type: string}
+        summary: {type: string}
+        content: {type: string}
+        url: {type: string}
+        team: {type: string}
+        team_id: {type: string}
+        owner: {type: string}
+        updated_at: {type: string, format: date-time}
+        stale: {type: boolean}
+        visibility: {type: string, enum: [public, team, hr]}
+        tags:
+          type: array
+          items: {type: string}
+
+    Preview:
+      type: object
+      properties:
+        preview_id: {type: string}
+        confirmation_token: {type: string}
+        expires_at: {type: string, format: date-time}
+        draft:
+          type: object
+          properties:
+            date_from: {type: string, format: date}
+            date_to: {type: string, format: date}
+            absence_type: {type: string}
+            comment: {type: string}
+        policy_notes:
+          type: array
+          items: {type: string}
+
+    AccessPreview:
+      type: object
+      properties:
+        preview_id: {type: string}
+        confirmation_token: {type: string}
+        expires_at: {type: string, format: date-time}
+        bundle: {type: string}
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              system: {type: string}
+              reason: {type: string}
+              approver: {type: string}
+
+    RequestItem:
+      type: object
+      properties:
+        request_id: {type: string}
+        id: {type: string}
+        kind: {type: string, enum: [absence, access, handoff]}
+        type: {type: string}
+        title: {type: string}
+        status: {type: string, enum: [pending, approved, rejected, cancelled]}
+        external_id: {type: string}
+        number: {type: string}
+        approver:
+          type: object
+          nullable: true
+          properties:
+            id: {type: string}
+            full_name: {type: string}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+
+    RequestDetail:
+      allOf:
+        - $ref: "#/components/schemas/RequestItem"
+        - type: object
+          properties:
+            payload:
+              type: object
+              properties:
+                date_from: {type: string}
+                date_to: {type: string}
+                absence_type: {type: string}
+                comment: {type: string}
+            next_step: {type: string}
+            history:
+              type: array
+              items:
+                type: object
+                properties:
+                  from: {type: string}
+                  to: {type: string}
+                  comment: {type: string}
+                  created_at: {type: string, format: date-time}
+
+    TeamMember:
+      type: object
+      properties:
+        id: {type: string}
+        full_name: {type: string}
+        email: {type: string}
+        position: {type: string}
+        team:
+          type: object
+          properties:
+            id: {type: string}
+            name: {type: string}
+            slug: {type: string}
+        mentor:
+          type: object
+          nullable: true
+          properties:
+            id: {type: string}
+            full_name: {type: string}
+        progress: {$ref: "#/components/schemas/Item"}
+        pace:
+          type: object
+          properties:
+            expected: {type: integer}
+            completed: {type: integer}
+            percent: {type: integer}
+        blockers:
+          type: array
+          items:
+            type: object
+            properties:
+              item_id: {type: string}
+              title: {type: string}
+              reason: {type: string}
+        overdue:
+          type: array
+          items:
+            type: object
+            properties:
+              item_id: {type: string}
+              title: {type: string}
+              due_on: {type: string}
+              days_overdue: {type: integer}
+        at_risk: {type: boolean}
+
+    TeamReport:
+      type: object
+      properties:
+        interns:
+          type: array
+          items: {$ref: "#/components/schemas/TeamMember"}
+        overview:
+          type: object
+          properties:
+            interns: {type: integer}
+            avg_progress: {type: integer}
+            avg_pace: {type: integer}
+            blocked: {type: integer}
+            overdue: {type: integer}
+            at_risk: {type: integer}
+
+    Flag:
+      type: object
+      properties:
+        key: {type: string}
+        enabled: {type: boolean}
+        rollout: {type: integer}
+        description: {type: string}
+        updated_at: {type: string, format: date-time}
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              enum:
+                - VALIDATION_ERROR
+                - UNAUTHORIZED
+                - FORBIDDEN
+                - NOT_FOUND
+                - CONFLICT
+                - UPSTREAM_ERROR
+                - TIMEOUT
+                - SERVICE_UNAVAILABLE
+                - INTERNAL_ERROR
+            message: {type: string}
+            details: {type: object, additionalProperties: true}
+            trace_id: {type: string}
+
+  responses:
+    ValidationError:
+      description: Некорректные данные
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    Unauthorized:
+      description: Нет или недействительный токен
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    Forbidden:
+      description: Недостаточно прав
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    NotFound:
+      description: Объект не найден
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    RateLimited:
+      description: Превышен лимит запросов
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    UpstreamError:
+      description: Ошибка корпоративного сервиса
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    Unavailable:
+      description: Сервис недоступен
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    Timeout:
+      description: Не дождались ответа
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}

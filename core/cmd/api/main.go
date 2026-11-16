@@ -111,7 +111,7 @@ func main() {
 		Timeout: cfg.ChatTimeout,
 		Limiter: limiter,
 	}, chat.NewClient(), logger)
-	chatHandler := chat.NewHandler(chatService, recorder, logger)
+	chatHandler := chat.NewHandler(chatService, chat.NewPostgresHistoryStore(store.Pool()), recorder, logger)
 
 	srv.Mount("/api/v1", api.New(api.Deps{
 		Auth:       authHandler,

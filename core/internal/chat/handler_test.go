@@ -44,7 +44,7 @@ func newTestHandler(t *testing.T, upstreamURL string, limit int) *Handler {
 		Limiter: limiter,
 	}, NewClient(), nil)
 
-	return NewHandler(service, nil, nil)
+	return NewHandler(service, nil, nil, nil)
 }
 
 func chatRequest(t *testing.T, handler *Handler, body string) *httptest.ResponseRecorder {
@@ -159,7 +159,7 @@ func TestStreamReturnsGatewayTimeoutOnSlowUpstream(t *testing.T) {
 		AIPath:  "/api/v1/chat/stream",
 		Timeout: 20 * time.Millisecond,
 	}, NewClient(), nil)
-	handler := NewHandler(service, nil, nil)
+	handler := NewHandler(service, nil, nil, nil)
 
 	rec := chatRequest(t, handler, `{"message":"привет"}`)
 
@@ -183,7 +183,7 @@ func TestStreamIsRateLimited(t *testing.T) {
 		Timeout: 5 * time.Second,
 		Limiter: ratelimit.New(backend, 1),
 	}, NewClient(), nil)
-	handler := NewHandler(service, nil, nil)
+	handler := NewHandler(service, nil, nil, nil)
 
 	rec := chatRequest(t, handler, `{"message":"первый"}`)
 	require.Equal(t, http.StatusOK, rec.Code)

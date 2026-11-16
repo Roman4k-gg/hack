@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/features/auth/authStore';
 import { useChatStore } from '../chatStore';
 import { parseChatEvent } from '../schemas';
@@ -17,6 +17,10 @@ export function useChatSession() {
   const mock = useMockChat();
   const [mode, setMode] = useState<ChatMode>('live');
 
+  useEffect(() => {
+    return () => stopStream();
+  }, [userId, stopStream]);
+
   function send(content: string) {
     const text = content.trim();
     const store = useChatStore.getState();
@@ -33,6 +37,7 @@ export function useChatSession() {
     store.sendMessage(text);
 
     const messageId = useChatStore.getState().activeMessageId;
+    const conversationId = useChatStore.getState().conversationId;
     let terminal = false;
     let receivedEvent = false;
 
@@ -42,26 +47,28 @@ export function useChatSession() {
 
     void start({
       url: CHAT_URL,
-      body: { message: text },
-      headers: token
-        ? { Authorization: `Bearer ${token}` }
-        : undefined,
+      body: conversationId
+        ? { message: text, conversation_id: conversationId }
+        : { message: text },
+      headers: token ? { Authorization: 'Bearer ' + token } : undefined,
       onEvent: (event) => {
-        if (!isCurrent()) return true;
+        if (!isCurrent()) return;
 
         let parsed;
-
         try {
           parsed = parseChatEvent(event);
         } catch {
           throw new Error('Получено некорректное событие ответа');
         }
 
+        if (parsed.type === 'meta') {
+          useChatStore.getState().setConversationId(parsed.conversation_id);
+          return;
+        }
+
         receivedEvent = true;
         useChatStore.getState().applyEvent(parsed);
-
         terminal = parsed.type === 'done' || parsed.type === 'error';
-        return terminal;
       },
       onComplete: () => {
         if (!terminal && isCurrent()) {
@@ -91,17 +98,14 @@ export function useChatSession() {
 
   function retry() {
     const state = useChatStore.getState();
-
     if (state.status !== 'error') return;
 
     const index = state.messages
       .map((message) => message.role)
       .lastIndexOf('user');
-
     if (index < 0) return;
 
     const question = state.messages[index].content;
-
     resetToLastQuestion();
     send(question);
   }
@@ -128,13 +132,13 @@ function failCurrentAnswer(message: string) {
       item.id !== state.activeMessageId
         ? item
         : {
-          ...item,
-          toolCalls: item.toolCalls?.map((tool) =>
-            tool.status === 'running'
-              ? { ...tool, status: 'error' as const }
-              : tool,
-          ),
-        },
+            ...item,
+            toolCalls: item.toolCalls?.map((tool) =>
+              tool.status === 'running'
+                ? { ...tool, status: 'error' as const }
+                : tool,
+            ),
+          },
     ),
   });
 
