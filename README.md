@@ -115,8 +115,8 @@ curl -X POST http://localhost:3000/api/v1/auth/login \
   критерии приёмки (`spec.md`), архитектура и решения (`plan.md`), задачи по
   ролям (`tasks.md`), контракты (`contracts/rest.yaml`, `contracts/sse.md`,
   `contracts/mcp/*.json`), промпт (`prompts/system.md`).
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — архитектура, стек, потоки, риски, ADR.
-- [`plan_hackathon.md`](plan_hackathon.md) — план работ и прогресс по ролям.
+- [`specs/001-ai-buddy/quickstart.md`](specs/001-ai-buddy/quickstart.md) — запуск,
+  проверка и сценарий демо.
 
 ## Демо-аккаунты
 

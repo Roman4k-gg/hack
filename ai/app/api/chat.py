@@ -31,6 +31,7 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     user_id: str | None = None
     role: str | None = None
+    conversation_id: str | None = Field(default=None, max_length=64)
 
 
 def build_tools(settings: Settings) -> ToolBackend:
@@ -72,10 +73,12 @@ def trace_id_from(*candidates: str | None) -> str:
 
 
 async def stream_events(
-    agent: Agent, user: User, message: str, trace_id: str = ""
+    agent: Agent, user: User, message: str, trace_id: str = "", conversation_id: str = ""
 ) -> AsyncIterator[str]:
     try:
-        async for event in agent.run(user, message, trace_id=trace_id):
+        async for event in agent.run(
+            user, message, trace_id=trace_id, conversation_id=conversation_id
+        ):
             yield sse.format_event(event)
     except Exception:
         logger.exception("chat stream failed", extra={"fields": {"trace_id": trace_id}})
@@ -100,7 +103,9 @@ async def chat_stream(
             headers={"Retry-After": "60", "X-Trace-Id": trace_id},
         )
     return StreamingResponse(
-        stream_events(agent, user, body.message.strip(), trace_id),
+        stream_events(
+            agent, user, body.message.strip(), trace_id, (body.conversation_id or "").strip()
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -116,4 +121,4 @@ async def clear_history(
     agent: Annotated[Agent, Depends(get_agent)],
 ) -> None:
     agent.history.clear(user.id)
-    agent.pending.pop(user.id)
+    agent.pending.clear(user.id)

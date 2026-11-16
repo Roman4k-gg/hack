@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -207,6 +208,35 @@ func TestServiceStreamRejectsEmptyMessage(t *testing.T) {
 
 	service := NewService(Config{}, NewClient(), nil)
 
-	_, err := service.Stream(context.Background(), reqctx.Principal{UserID: "user-1"}, "", "  ")
+	_, err := service.Stream(context.Background(), reqctx.Principal{UserID: "user-1"}, "", "  ", "")
 	require.True(t, errors.Is(err, ErrEmptyMessage))
+}
+
+func TestServiceStreamSendsConversationID(t *testing.T) {
+	t.Parallel()
+
+	bodies := make(chan map[string]any, 2)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		bodies <- body
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	service := NewService(Config{AIURL: upstream.URL, Timeout: 5 * time.Second}, NewClient(), nil)
+	principal := reqctx.Principal{UserID: "user-1", Role: rbac.RoleIntern}
+
+	for _, conversationID := range []string{"conv-1", ""} {
+		stream, err := service.Stream(context.Background(), principal, "", "привет", conversationID)
+		require.NoError(t, err)
+		stream.Cancel()
+		_ = stream.Body.Close()
+	}
+
+	first, second := <-bodies, <-bodies
+	require.Equal(t, "conv-1", first["conversation_id"])
+	require.Equal(t, "user-1", first["user_id"])
+	require.NotContains(t, second, "conversation_id")
 }

@@ -8,6 +8,13 @@ const toolLabels: Record<string, string> = {
     get_onboarding_plan: 'Получение плана адаптации',
     get_my_profile: 'Получение профиля стажёра',
     search_knowledge: 'Поиск в базе знаний',
+    preview_absence_request: 'Черновик заявки на отсутствие',
+    create_absence_request: 'Создание заявки на отсутствие',
+    get_my_requests: 'Получение моих заявок',
+    preview_access_bundle: 'Черновик заявок на доступы',
+    create_access_requests: 'Создание заявок на доступы',
+    preview_handoff: 'Черновик вопроса наставнику',
+    create_handoff: 'Отправка вопроса наставнику',
 };
 
 const statusLabels: Record<ChatToolCall['status'], string> = {

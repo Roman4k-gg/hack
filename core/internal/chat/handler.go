@@ -78,7 +78,7 @@ func (h *Handler) handleStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stream, err := h.service.Stream(r.Context(), principal, r.Header.Get("Authorization"), req.Message)
+	stream, err := h.service.Stream(r.Context(), principal, r.Header.Get("Authorization"), req.Message, conversation.ID)
 	if err != nil {
 		h.writeError(w, r, err)
 		return

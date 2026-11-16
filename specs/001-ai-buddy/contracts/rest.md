@@ -9,8 +9,8 @@
 |---|---|---|
 | `GET` | `/healthz` | `{"status":"ok"}` |
 | `GET` | `/readyz` | `{"status":"ok","llm_mode":"mock","prompt_version":"v1"}` |
-| `POST` | `/api/v1/chat/stream` | Тело `{"message", "user_id"?, "role"?}` (§3.7), заголовок `Authorization: Bearer <JWT core>`, ответ — SSE ([sse.md](sse.md)) |
-| `DELETE` | `/api/v1/chat/history` | Очистить историю диалога и ожидающий черновик пользователя, `204` |
+| `POST` | `/api/v1/chat/stream` | Тело `{"message", "user_id"?, "role"?, "conversation_id"?}` (§3.7), заголовок `Authorization: Bearer <JWT core>`, ответ — SSE ([sse.md](sse.md)) |
+| `DELETE` | `/api/v1/chat/history` | Очистить историю и ожидающие черновики во всех диалогах пользователя, `204` |
 
 Ответы `/api/v1/chat/stream` кроме SSE: `401` — нет или плохой JWT, `422` — пустое сообщение
 или длиннее 4000 символов, `429` — rate limit (SSE-событие `error`).
