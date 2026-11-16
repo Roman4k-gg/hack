@@ -72,7 +72,7 @@ export const useChatStore = create<ChatState>((set) => ({
         }
 
         if (event.type === 'done') {
-            return { status: 'idle', activeMessageId: null };
+            return { status: 'idle', error: null, activeMessageId: null };
         }
 
         return {

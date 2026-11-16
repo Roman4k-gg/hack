@@ -52,7 +52,7 @@ export function useChatSession() {
         : { message: text },
       headers: token ? { Authorization: 'Bearer ' + token } : undefined,
       onEvent: (event) => {
-        if (!isCurrent()) return;
+        if (!isCurrent()) return false;
 
         let parsed;
         try {
@@ -63,12 +63,14 @@ export function useChatSession() {
 
         if (parsed.type === 'meta') {
           useChatStore.getState().setConversationId(parsed.conversation_id);
-          return;
+          return false;
         }
 
         receivedEvent = true;
         useChatStore.getState().applyEvent(parsed);
         terminal = parsed.type === 'done' || parsed.type === 'error';
+
+        return terminal;
       },
       onComplete: () => {
         if (!terminal && isCurrent()) {

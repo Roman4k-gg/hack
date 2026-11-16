@@ -40,6 +40,7 @@ function streamResponse(events: string[]): Response {
     return {
         ok: true,
         status: 200,
+        headers: new Headers({ 'content-type': 'text/event-stream' }),
         body: {
             getReader: () => {
                 let index = 0;
@@ -55,6 +56,8 @@ function streamResponse(events: string[]): Response {
 
                         return { done: false, value: chunk };
                     },
+                    releaseLock: () => {},
+                    cancel: () => {},
                 };
             },
         },
