@@ -23,14 +23,29 @@ ROLE_SCOPES = {
     ],
     "mentor": [
         "onboarding:plan:read",
+        "onboarding:plan:write",
         "chat:use",
         "kb:read",
         "kb:read:team",
+        "onboarding:team:read",
+        "analytics:team",
         "absence:self",
         "absence:self:write",
         "request:self",
+        "access:self",
+        "access:self:write",
     ],
-    "hr": ["onboarding:plan:read", "kb:read", "kb:read:hr", "request:self"],
+    "hr": [
+        "onboarding:plan:read",
+        "kb:read",
+        "kb:read:hr",
+        "onboarding:team:read",
+        "analytics:team",
+        "requests:read",
+        "requests:write",
+        "request:self",
+        "absence:approve:team",
+    ],
 }
 
 PEOPLE = {

@@ -1,0 +1,71 @@
+{
+  "name": "preview_absence_request",
+  "description": "Готовит черновик заявки на отгул, отпуск или больничный и показывает правила. Заявку НЕ создаёт. После черновика попроси пользователя явно подтвердить.",
+  "kind": "preview",
+  "scope": "absence:self",
+  "confirmed_by": "create_absence_request",
+  "requires_confirmation": false,
+  "annotations": {
+    "read_only": true,
+    "idempotent": false
+  },
+  "llm_parameters": {
+    "type": "object",
+    "properties": {
+      "date_from": {
+        "type": "string",
+        "format": "date"
+      },
+      "date_to": {
+        "type": "string",
+        "format": "date"
+      },
+      "absence_type": {
+        "type": "string",
+        "enum": [
+          "vacation",
+          "day_off",
+          "sick_leave"
+        ]
+      },
+      "comment": {
+        "type": "string",
+        "maxLength": 500
+      }
+    },
+    "required": [
+      "date_from",
+      "date_to",
+      "absence_type"
+    ],
+    "additionalProperties": false
+  },
+  "mcp_input_schema": {
+    "type": "object",
+    "properties": {
+      "date_from": {
+        "title": "Date From",
+        "type": "string"
+      },
+      "date_to": {
+        "default": "",
+        "title": "Date To",
+        "type": "string"
+      },
+      "absence_type": {
+        "default": "day_off",
+        "title": "Absence Type",
+        "type": "string"
+      },
+      "comment": {
+        "default": "",
+        "title": "Comment",
+        "type": "string"
+      }
+    },
+    "required": [
+      "date_from"
+    ],
+    "title": "preview_absence_requestArguments"
+  }
+}

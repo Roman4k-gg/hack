@@ -1,0 +1,22 @@
+{
+  "name": "get_my_profile",
+  "description": "Профиль текущего пользователя: имя, роль, команда, должность.",
+  "kind": "read",
+  "scope": null,
+  "confirmed_by": null,
+  "requires_confirmation": false,
+  "annotations": {
+    "read_only": true,
+    "idempotent": true
+  },
+  "llm_parameters": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "mcp_input_schema": {
+    "type": "object",
+    "properties": {},
+    "title": "get_my_profileArguments"
+  }
+}

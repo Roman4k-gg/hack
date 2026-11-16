@@ -1,0 +1,33 @@
+{
+  "name": "preview_access_bundle",
+  "description": "Готовит черновик пакета доступов для роли (VPN, Jira, база знаний и т.д.): какие системы, зачем и кто согласует. Заявки НЕ создаёт. После черновика попроси пользователя явно подтвердить.",
+  "kind": "preview",
+  "scope": "access:self",
+  "confirmed_by": "create_access_requests",
+  "requires_confirmation": false,
+  "annotations": {
+    "read_only": true,
+    "idempotent": false
+  },
+  "llm_parameters": {
+    "type": "object",
+    "properties": {
+      "bundle": {
+        "type": "string",
+        "default": "intern"
+      }
+    },
+    "additionalProperties": false
+  },
+  "mcp_input_schema": {
+    "type": "object",
+    "properties": {
+      "bundle": {
+        "default": "intern",
+        "title": "Bundle",
+        "type": "string"
+      }
+    },
+    "title": "preview_access_bundleArguments"
+  }
+}

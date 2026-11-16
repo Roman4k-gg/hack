@@ -1,0 +1,40 @@
+{
+  "name": "create_absence_request",
+  "description": "Отправляет заявку на отсутствие по последнему черновику. Вызывай только если пользователь в новом сообщении явно подтвердил черновик. Аргументы не нужны.",
+  "kind": "write+confirmation",
+  "scope": "absence:self:write",
+  "confirmed_by": null,
+  "requires_confirmation": true,
+  "annotations": {
+    "read_only": false,
+    "idempotent": true
+  },
+  "llm_parameters": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "mcp_input_schema": {
+    "type": "object",
+    "properties": {
+      "preview_id": {
+        "title": "Preview Id",
+        "type": "string"
+      },
+      "confirmation_token": {
+        "title": "Confirmation Token",
+        "type": "string"
+      },
+      "idempotency_key": {
+        "title": "Idempotency Key",
+        "type": "string"
+      }
+    },
+    "required": [
+      "preview_id",
+      "confirmation_token",
+      "idempotency_key"
+    ],
+    "title": "create_absence_requestArguments"
+  }
+}

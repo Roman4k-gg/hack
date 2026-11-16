@@ -1,0 +1,39 @@
+{
+  "name": "search_knowledge",
+  "description": "Поиск по базе знаний команды: доступы, инструменты, процессы, отгулы. Возвращает документы с цитатой, ссылкой и датой обновления. В query передавай короткий запрос из ключевых слов, например «доступ Jira».",
+  "kind": "read",
+  "scope": "kb:read",
+  "confirmed_by": null,
+  "requires_confirmation": false,
+  "annotations": {
+    "read_only": true,
+    "idempotent": true
+  },
+  "llm_parameters": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "additionalProperties": false
+  },
+  "mcp_input_schema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "title": "Query",
+        "type": "string"
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "title": "search_knowledgeArguments"
+  }
+}

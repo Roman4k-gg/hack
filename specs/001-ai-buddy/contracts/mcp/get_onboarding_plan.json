@@ -1,0 +1,22 @@
+{
+  "name": "get_onboarding_plan",
+  "description": "Карта адаптации стажёра: этапы, пункты и их статусы, прогресс и следующий шаг. Используй, когда спрашивают, что делать дальше.",
+  "kind": "read",
+  "scope": "onboarding:plan:read",
+  "confirmed_by": null,
+  "requires_confirmation": false,
+  "annotations": {
+    "read_only": true,
+    "idempotent": true
+  },
+  "llm_parameters": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "mcp_input_schema": {
+    "type": "object",
+    "properties": {},
+    "title": "get_onboarding_planArguments"
+  }
+}

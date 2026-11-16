@@ -1,0 +1,22 @@
+{
+  "name": "get_my_requests",
+  "description": "Список заявок пользователя (отгулы, доступы) с их статусами.",
+  "kind": "read",
+  "scope": "request:self",
+  "confirmed_by": null,
+  "requires_confirmation": false,
+  "annotations": {
+    "read_only": true,
+    "idempotent": true
+  },
+  "llm_parameters": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "mcp_input_schema": {
+    "type": "object",
+    "properties": {},
+    "title": "get_my_requestsArguments"
+  }
+}
