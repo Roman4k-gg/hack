@@ -58,7 +58,5 @@
 Каждый инструмент MCP возвращает `{"ok": true, "result": ..., "citations": [...]}` или
 `{"ok": false, "error": {"code", "message"}, "citations": []}`. JSON Schema аргументов —
 в [`mcp/`](mcp): `llm_parameters` видит модель, `mcp_input_schema` принимает MCP-сервер.
-[`mcp/tools.json`](mcp/tools.json) — сводка всех инструментов: скоуп, только чтение или запись,
-нужно ли подтверждение, схема входа и какой запрос в core делает инструмент.
 Файлы генерируются из кода командой `uv run python -m evals.export_contracts`, тест
 `ai/tests/test_specs.py` падает, если они разошлись с кодом.
