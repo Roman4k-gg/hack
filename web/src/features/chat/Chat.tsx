@@ -140,7 +140,7 @@ export function Chat() {
 
             {mode === 'demo' && (
                 <div className="chat__notice" role="status">
-                    AI-сервис недоступен — показан демо-режим без обращения к
+                    AI-сервис недоступен — включён Демо-режим без обращения к
                     бэкенду.
                 </div>
             )}
