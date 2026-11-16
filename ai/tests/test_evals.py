@@ -89,6 +89,23 @@ def test_fake_core_search_is_ranked_and_marks_stale():
     assert FakeCore().me()["team_name"] == "Search"
 
 
+def test_fake_core_returns_chunks_like_core():
+    [jira] = [item for item in FakeCore().search("доступ", 5) if item["title"].endswith("Jira")]
+    assert jira["chunk"] == "3. Доступ приходит на рабочую почту в течение дня."
+    assert FakeCore().search("пошаговая", 5)[0]["chunk"].startswith("1. Напишите")
+
+
+def test_fake_core_document_endpoint_checks_acl():
+    core = FakeCore()
+    ok = core.route("GET", f"/api/v1/kb/documents/{DOC_IDS['jira-access']}", {}, {})
+    assert ok.status_code == 200
+    assert "SSO" in ok.json()["content"]
+    assert ok.json()["owner"] == "petr@demo.local"
+    hidden = core.route("GET", f"/api/v1/kb/documents/{DOC_IDS['vpn-setup']}", {}, {})
+    assert hidden.status_code == 403
+    assert core.route("GET", "/api/v1/kb/documents/doc-missing", {}, {}).status_code == 404
+
+
 async def test_run_case_collects_errors_and_unknown_routes():
     class Broken:
         name = "broken"

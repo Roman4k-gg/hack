@@ -146,7 +146,7 @@ JSON Schema инструментов — в [`contracts/mcp/`](contracts/mcp).
 | FR-03 | Агентный цикл — не больше `MAX_TOOL_ITERATIONS` (5) шагов, потом честный текст «не уложился». |
 | FR-04 | Модели доступны только инструменты, на которые у пользователя есть скоуп. Вызов чужого — `FORBIDDEN`. |
 | FR-05 | Все вызовы core идут с JWT пользователя; ошибки core маппятся в `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_ERROR`, `CONFLICT`, `TIMEOUT`, `UPSTREAM_ERROR`. |
-| FR-06 | Поиск: сначала вся фраза, затем до 4 ключевых слов без стоп-слов и с отрезанными окончаниями; документы ранжируются по сумме совпадений; в ответ — до 3 документов и их цитаты. |
+| FR-06 | Поиск: сначала вся фраза, затем до 4 ключевых слов без стоп-слов и с отрезанными окончаниями; документы ранжируются по сумме совпадений; в ответ — до 3 документов, слабее половины лучшего отсекаются; у лучшего документа берётся полный текст через `GET /api/v1/kb/documents/{id}` (ACL проверяет core). |
 | FR-07 | Действия — в два шага: `preview_*` → явное «да» в **следующем** сообщении → `create_*`. |
 | FR-08 | `confirmation_token` и `preview_id` модели не показываются; агент хранит их сам (TTL 10 минут) и подставляет при `create_*`; `idempotency_key = preview_id`. |
 | FR-09 | Инструменты вызываются через MCP-сервер (`TOOLS_MODE=mcp`); если MCP недоступен — прямой вызов core с теми же правами. |
@@ -170,7 +170,7 @@ JSON Schema инструментов — в [`contracts/mcp/`](contracts/mcp).
 | FR-03 | `tests/test_agent.py::test_iteration_limit` |
 | FR-04 | `tests/test_tools.py::test_tools_filtered_by_scope`, `tests/test_tools.py::test_unknown_tool_is_forbidden`, `tests/test_mcp.py::test_mcp_rejects_tool_outside_user_scopes` |
 | FR-05 | `tests/test_tools.py::test_get_onboarding_plan_forwards_user_token`, `tests/test_tools.py::test_core_errors_are_mapped`, `tests/test_tools.py::test_core_network_errors` |
-| FR-06 | `tests/test_search.py::test_search_falls_back_to_keywords_and_merges`, `tests/test_search.py::test_stem_cuts_russian_endings_only`, `tests/test_search.py::test_search_ranks_documents_matching_more_keywords` |
+| FR-06 | `tests/test_search.py::test_search_falls_back_to_keywords_and_merges`, `tests/test_search.py::test_stem_cuts_russian_endings_only`, `tests/test_search.py::test_search_ranks_documents_matching_more_keywords`, `tests/test_search.py::test_search_drops_weak_matches_from_citations`, `tests/test_search.py::test_search_reads_full_text_of_best_document` |
 | FR-07 | `tests/test_absence.py::test_create_in_same_turn_as_preview_is_rejected`, `tests/test_absence.py::test_create_in_next_turn_uses_hidden_token` |
 | FR-08 | `tests/test_absence.py::test_pending_store_expires_and_hides_token`, `tests/test_absence.py::test_pending_kept_only_for_retryable_errors` |
 | FR-09 | `tests/test_mcp.py::test_mcp_round_trip_forwards_user_jwt`, `tests/test_mcp.py::test_mcp_unavailable_falls_back_to_direct_calls` |

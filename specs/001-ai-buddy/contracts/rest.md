@@ -20,7 +20,7 @@
 |---|---|---|
 | `get_my_profile` | `GET /api/v1/me` | §3.2 |
 | `get_onboarding_plan` | `GET /api/v1/onboarding/plan` | §3.3 |
-| `search_knowledge` | `GET /api/v1/kb/search?q=&limit=5` | §3.8, §10.1 |
+| `search_knowledge` | `GET /api/v1/kb/search?q=&limit=5`, затем `GET /api/v1/kb/documents/{id}` для лучшего | §3.8, §3.9, §10.1, §10.2 |
 | `preview_absence_request` | `POST /api/v1/requests/absence/preview` | §3.10, §10.3 |
 | `create_absence_request` | `POST /api/v1/requests/absence` | §3.11, §10.4 |
 | `get_my_requests` | `GET /api/v1/requests` | §3.12, §10.5 |

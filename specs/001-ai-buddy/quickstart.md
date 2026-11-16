@@ -20,7 +20,9 @@ make up-dev
 make seed
 ```
 
-`make up-dev` поднимает core, PostgreSQL, Redis, web, `ai` и `mcp`. Только тесты AI —
+На Windows без `make` — `.\make.ps1 up-dev` и `.\make.ps1 seed`.
+
+`up-dev` поднимает core, PostgreSQL, Redis, web, `ai` и `mcp` (профиль `dev`). Только тесты AI —
 `make test-ai`, AI с перезагрузкой — `make dev-ai`.
 
 ## Real LLM
