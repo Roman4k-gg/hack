@@ -132,7 +132,7 @@ services:
       context: ./ai
       dockerfile: Dockerfile
     image: ai-buddy/ai:dev
-    profiles: ["mcp"]
+    profiles: ["dev", "demo", "mcp"]
     restart: unless-stopped
     command: ["python", "-m", "app.mcp"]
     environment:

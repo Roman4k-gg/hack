@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/features/auth/authStore';
 import { useChatStore } from '../chatStore';
 import { parseChatEvent } from '../schemas';
@@ -18,128 +18,102 @@ export function useChatSession() {
   const [mode, setMode] = useState<ChatMode>('live');
 
   useEffect(() => {
-    return () => {
-      stopStream();
-    };
+    return () => stopStream();
   }, [userId, stopStream]);
 
-  const send = useCallback(
-    (content: string) => {
-      const text = content.trim();
+  function send(content: string) {
+    const text = content.trim();
+    const store = useChatStore.getState();
 
-      if (!text) {
-        return;
-      }
+    if (!text || store.activeMessageId) return;
 
-      const store = useChatStore.getState();
+    if (import.meta.env.VITE_CHAT_DEMO === 'true') {
+      setMode('demo');
+      mock.send(text);
+      return;
+    }
 
-      if (store.activeMessageId) {
-        return;
-      }
+    setMode('live');
+    store.sendMessage(text);
 
-      if (import.meta.env.VITE_CHAT_DEMO === 'true') {
-        setMode('demo');
-        mock.send(text);
-        return;
-      }
+    const messageId = useChatStore.getState().activeMessageId;
+    const conversationId = useChatStore.getState().conversationId;
+    let terminal = false;
+    let receivedEvent = false;
 
-      setMode('live');
-      useChatStore.getState().sendMessage(text);
+    function isCurrent() {
+      return useChatStore.getState().activeMessageId === messageId;
+    }
 
-      const messageId = useChatStore.getState().activeMessageId;
-      let terminal = false;
-      let receivedEvent = false;
+    void start({
+      url: CHAT_URL,
+      body: conversationId
+        ? { message: text, conversation_id: conversationId }
+        : { message: text },
+      headers: token ? { Authorization: 'Bearer ' + token } : undefined,
+      onEvent: (event) => {
+        if (!isCurrent()) return;
 
-      function isCurrent() {
-        return useChatStore.getState().activeMessageId === messageId;
-      }
+        let parsed;
+        try {
+          parsed = parseChatEvent(event);
+        } catch {
+          throw new Error('Получено некорректное событие ответа');
+        }
 
-      const conversationId = useChatStore.getState().conversationId;
+        if (parsed.type === 'meta') {
+          useChatStore.getState().setConversationId(parsed.conversation_id);
+          return;
+        }
 
-      void start({
-        url: CHAT_URL,
-        body: conversationId
-          ? { message: text, conversation_id: conversationId }
-          : { message: text },
-        headers: token
-          ? { Authorization: `Bearer ${token}` }
-          : undefined,
-        onEvent: (event) => {
-          if (!isCurrent()) {
-            return;
-          }
+        receivedEvent = true;
+        useChatStore.getState().applyEvent(parsed);
+        terminal = parsed.type === 'done' || parsed.type === 'error';
+      },
+      onComplete: () => {
+        if (!terminal && isCurrent()) {
+          failCurrentAnswer(
+            'Ответ прервался. Уже полученный текст сохранён. Попробуй ещё раз.',
+          );
+        }
+      },
+      onFailure: (error, httpStatus) => {
+        if (!isCurrent()) return;
 
-          let parsed;
+        if (
+          !receivedEvent &&
+          httpStatus !== undefined &&
+          DEMO_STATUSES.has(httpStatus)
+        ) {
+          resetToLastQuestion();
+          setMode('demo');
+          mock.send(text);
+          return;
+        }
 
-          try {
-            parsed = parseChatEvent(event);
-          } catch {
-            throw new Error('Получено некорректное событие ответа');
-          }
+        failCurrentAnswer(error.message);
+      },
+    });
+  }
 
-          if (parsed.type === 'meta') {
-            useChatStore.getState().setConversationId(parsed.conversation_id);
-            return;
-          }
-
-          receivedEvent = true;
-          useChatStore.getState().applyEvent(parsed);
-
-          terminal = parsed.type === 'done' || parsed.type === 'error';
-        },
-        onComplete: () => {
-          if (!terminal && isCurrent()) {
-            failCurrentAnswer(
-              'Ответ прервался. Уже полученный текст сохранён. Попробуй ещё раз.',
-            );
-          }
-        },
-        onFailure: (error, httpStatus) => {
-          if (!isCurrent()) {
-            return;
-          }
-
-          if (
-            !receivedEvent &&
-            httpStatus !== undefined &&
-            DEMO_STATUSES.has(httpStatus)
-          ) {
-            resetToLastQuestion();
-            setMode('demo');
-            mock.send(text);
-            return;
-          }
-
-          failCurrentAnswer(error.message);
-        },
-      });
-    },
-    [mock, start, token],
-  );
-
-  const retry = useCallback(() => {
+  function retry() {
     const state = useChatStore.getState();
+    if (state.status !== 'error') return;
 
-    if (state.status !== 'error') {
-      return;
-    }
-
-    const index = state.messages.map((message) => message.role).lastIndexOf('user');
-
-    if (index < 0) {
-      return;
-    }
+    const index = state.messages
+      .map((message) => message.role)
+      .lastIndexOf('user');
+    if (index < 0) return;
 
     const question = state.messages[index].content;
-
     resetToLastQuestion();
     send(question);
-  }, [send]);
+  }
 
-  const stop = useCallback(() => {
+  function stop() {
     stopStream();
     mock.stop();
-  }, [mock, stopStream]);
+  }
 
   return {
     send,

@@ -1,76 +1,47 @@
-# Задачи · AI-buddy
+# Задачи: AI-сервис и MCP
 
-Отметки отражают состояние на финале хакатона.
+Владелец — Тимоха. ID T-01…T-12 — из [`plan_day1.md`](../../plan_day1.md), дальше — новые.
+`[x]` — сделано и закоммичено, в скобках — коммит.
 
-## Рома · backend
+## День 1
 
-| # | Задача | Статус |
-|---|---|---|
-| R-01 | Каркас `core/`, compose, `.env.example`, Makefile, healthchecks | ✅ |
-| R-02 | PostgreSQL + Redis, миграции, идемпотентный seed | ✅ |
-| R-03 | Mock-логин, JWT, `GET /api/v1/me` | ✅ |
-| R-04 | RBAC: скоупы, middleware, тесты доступа | ✅ |
-| R-05 | `GET /api/v1/onboarding/plan` — этапы, пункты, прогресс, следующий шаг | ✅ |
-| R-06 | `PATCH /api/v1/onboarding/items/{id}` — статусы, идемпотентность | ✅ |
-| R-07 | SSE-прокси `POST /api/v1/chat/stream` | ✅ |
-| R-08 | Аудит в `audit_log` и события в `events` | ✅ |
-| R-09 | 150+ тестов, покрытие 82%, гейт в CI | ✅ |
-| R-10 | Баз�� знаний: `GET /kb/search` с ACL, `GET /kb/documents/{id}`, чанки | ✅ |
-| R-11 | Метрики команды: `GET /team/interns`, `GET /team/overview` | ✅ |
-| R-12 | План стажёра для наставника: `GET /team/interns/{id}/plan` | ✅ |
-| R-13 | Заявки: preview → подтверждение → создание, Redis-токены, идемпотентность | ✅ |
-| R-14 | Пакеты доступов: `POST /requests/access/preview` и `/requests/access` | ✅ |
-| R-15 | Фиче-флаги: `GET/PATCH /admin/feature-flags` | ✅ |
-| R-16 | Аналитика: топ вопросов, контентные дыры, сводка | ✅ |
-| R-17 | Имитации корпоративных сервисов (отсутствия, доступы) | ✅ |
-| R-18 | Контракт API и SDD-спеки | ✅ |
+- [x] **T-01** SDD-спека `specs/001-ai-buddy/` и тест связи спеки с кодом
+- [x] **T-02** Каркас `ai/`: FastAPI, конфиг, `/healthz`, `/readyz`
+- [x] **T-03** Интерфейс провайдера, mock LLM и real-провайдер (`7933db6`). Вместо LiteLLM — свой
+  httpx-клиент к OpenAI-совместимому API, см. [research.md](research.md)
+- [x] **T-04** Агентный цикл и SSE-события (`ce0cd6a`)
+- [x] **T-05** MCP-сервер: `get_my_profile`, `get_onboarding_plan`, `search_knowledge` (`562288f`).
+  Вместо FastMCP — `MCPServer` из MCP SDK 2.x
+- [x] **T-06** Проброс JWT пользователя из AI в MCP и в core (`562288f`)
+- [x] **T-07** Сценарный mock LLM для демо (`a568309`)
+- [x] **T-08** Логи `agent_run`, таймауты, retry, обработка ошибок инструментов (`c435a3f`)
+- [ ] **T-09** Интеграция с Ромой: SSE через шлюз core, JWT, отмена; запуск `ai` и `mcp` в Docker Compose
+- [x] **T-10** Golden-вопросы: 20 кейсов, fake core, отчёт; стемминг в поиске (`c3051d1`)
+- [x] **T-11** Dockerfile AI-сервиса
+- [x] **T-12** pytest-тесты на tool loop (сейчас 170+ тестов, покрытие 99%)
 
-## Тимоха · AI/ML
+## Сценарии 3–4 и качество
 
-| # | Задача | Статус |
-|---|---|---|
-| T-01 | Каркас FastAPI, конфиг, health, проверка клиентского JWT | ✅ |
-| T-02 | Провайдер LLM: интерфейс, mock, OpenAI-совместимый | ✅ |
-| T-03 | Агентный цикл и SSE-события | ✅ |
-| T-04 | Инструменты: профиль, план адаптации, база знаний | ✅ |
-| T-05 | Сценарный mock для демо | ✅ |
-| T-06 | Таймауты, retry, обработка ошибок инструментов | ✅ |
-| T-07 | MCP-сервер и golden-набор вопросов | ⏳ вынесено за рамки демо |
+- [x] **T-13** Отгул и пакет доступов: preview → подтверждение → create, скрытый токен,
+  разбор дат, `get_my_requests` (`f9b9484`)
+- [x] **T-14** Guardrails: injection, очистка документов, маскирование ПДн, rate limit,
+  injection set 21 кейс (`a4f3f84`)
 
-## Катя · frontend, чат
+## Осталось
 
-| # | Задача | Статус |
-|---|---|---|
-| K-01 | Компоненты чата, SSE-хук, Zustand-store, Zod-схемы | ✅ |
-| K-02 | Реальный `/api/v1/chat/stream` с Bearer и демо-фолбэком | ✅ |
-| K-03 | Состояния потока, retry, остановка | ✅ |
-| K-04 | Vitest-тесты парсера, схем и стора | ✅ |
-| K-05 | Playwright e2e чата | ✅ |
+- [ ] **T-15** Подключить real LLM: ключ в `.env`, прогон golden и injection на real, правка промпта
+- [ ] **T-16** Репетиция демо: 4 сценария в mock и real
+- [ ] **T-17** (stretch) AI-cron: утренний дайджест и напоминания о зависших заявках
+- [ ] **T-18** (stretch) Handoff наставнику, когда ответ не найден
+- [ ] **T-19** (stretch) История диалога: последние 10 сообщений + summary
+- [ ] **T-20** (stretch) Черновики в Redis для нескольких экземпляров `ai`
 
-## Маша · frontend, каркас, карта, дизайн
+## Проверки перед коммитом
 
-| # | Задача | Статус |
-|---|---|---|
-| M-01 | Скаффолд web, дизайн-токены, app shell | ✅ |
-| M-02 | Логин, защищённые маршруты, auth-store | ✅ |
-| M-03 | Карта адаптации из API, optimistic PATCH, состояния загрузки | ✅ |
-| M-04 | Экран «Мои заявки» | ✅ |
-| M-05 | Панель наставника: метрики, топ вопросов, контентные дыры | ✅ |
-| M-06 | План стажёра для наставника | ✅ |
-| M-07 | UI-кит: StatusBadge, EmptyState, Skeleton, DemoBadge | ✅ |
-| M-08 | Сброс истории чата и кеша при смене пользователя | ✅ |
-
-## Общие задачи
-
-| # | Задача | Статус |
-|---|---|---|
-| C-01 | Репозиторий, `.gitignore`, `.gitattributes` | ✅ |
-| C-02 | Контракт API (`docs/api-contract.md`) | ✅ |
-| C-03 | Схема SSE, единая для AI и фронта | ✅ |
-| C-04 | Docker Compose с профилями dev/demo | ✅ |
-| C-05 | Makefile: up, seed, smoke, coverage, coverage-gate | ✅ |
-| C-06 | README с порядком проверки | ✅ |
-| C-07 | SDD-спеки `specs/001-ai-buddy/` | ✅ |
-| C-08 | CI: Go, Go+БД+Redis, Python, Web, Docker, smoke | ✅ |
-| C-09 | Сквозная проверка стенда `scripts/smoke.sh` | ✅ |
-| C-10 | Гейт покрытия 80% | ✅ |
+```bash
+cd ai
+uv run ruff check --fix . && uv run ruff format .
+uv run pytest
+uv run python -m evals.run
+uv run python -m evals.run --suite injection
+```

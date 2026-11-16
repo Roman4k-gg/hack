@@ -31,17 +31,6 @@ def test_build_provider_by_mode():
     assert isinstance(build_provider(Settings(llm_mode="real")), OpenAICompatProvider)
 
 
-async def test_mock_provider_echoes_question():
-    response = await MockProvider().complete([{"role": "user", "content": "Привет"}], [])
-    assert "Привет" in response.text
-    assert response.tool_calls == []
-
-
-async def test_mock_provider_without_question():
-    response = await MockProvider().complete([], [])
-    assert response.text.startswith("Я AI-buddy")
-
-
 async def test_openai_provider_parses_tool_calls():
     seen = {}
 

@@ -1,61 +1,47 @@
-# SSE-события чата
+# SSE-контракт чата
 
-Формат зафиксирован один на все слои: AI-сервис отдаёт, core переписывает как есть,
-фронтенд разбирает. Проверяется фронтовым Zod-схемой
-`web/src/features/chat/schemas.ts`.
+Источник истины — [`docs/api-contract.md` §5](../../../docs/api-contract.md). Здесь — что именно
+отдаёт AI-сервис и в каком порядке. Реализация: [`ai/app/sse.py`](../../../ai/app/sse.py).
 
-## Формат
+Каждое событие — `event: message` и одна строка `data` с JSON, между событиями пустая строка.
+
+| `type` | `data` |
+|---|---|
+| `delta` | `{"type":"delta","text":"..."}` — кусок ответа, по 3 слова |
+| `tool_call` | `{"type":"tool_call","toolCall":{"id","name","status"}}`, `status`: `running` → `success` / `error` с тем же `id` |
+| `citation` | `{"type":"citation","citation":{"id","title","url"?}}` |
+| `done` | `{"type":"done"}` |
+| `error` | `{"type":"error","message":"..."}` |
+
+## Порядок
+
+```
+tool_call(running) → tool_call(success|error)   × N, до 5 шагов
+delta × M                                         финальный ответ
+citation × K                                      документы из search_knowledge, без повторов
+done
+```
+
+- `error` завершает поток без `done`: LLM недоступна после retry, внутренняя ошибка,
+  превышен rate limit (в этом случае HTTP-статус `429` и заголовок `Retry-After: 60`).
+- Если инструмент вернул ошибку, поток продолжается: модель получает ошибку и объясняет её.
+- Заголовок ответа `X-Trace-Id` совпадает с `trace_id` в логе `agent_run`.
+
+## Пример: вопрос по базе знаний
 
 ```
 event: message
-data: {"type": "delta", "text": "Твой следующий шаг — "}
+data: {"type":"tool_call","toolCall":{"id":"call-1","name":"search_knowledge","status":"running"}}
 
 event: message
-data: {"type": "tool_call", "toolCall": {"id": "call-1", "name": "get_onboarding_plan", "status": "success"}}
+data: {"type":"tool_call","toolCall":{"id":"call-1","name":"search_knowledge","status":"success"}}
 
 event: message
-data: {"type": "citation", "citation": {"id": "jira-access", "title": "Как получить доступ к Jira", "url": "https://demo.local/docs/jira-access"}}
+data: {"type":"delta","text":"Нашёл в документе "}
 
 event: message
-data: {"type": "done"}
+data: {"type":"citation","citation":{"id":"55555555-5555-5555-5555-555555555501","title":"Как получить доступ к Jira","url":"https://demo.local/docs/jira-access"}}
+
+event: message
+data: {"type":"done"}
 ```
-
-## События
-
-| `type` | Поля | Смысл | Что делает фронт |
-|---|---|---|---|
-| `delta` | `text` | часть текста ответа | дописывает в последнее сообщение ассистента |
-| `tool_call` | `toolCall: {id, name, status}` | вызов инструмента | рисует карточку инструмента |
-| `citation` | `citation: {id, title, url?}` | источник ответа | рисует чип-цитату со ссылкой |
-| `done` | — | поток завершён | снимает индикатор стриминга |
-| `error` | `message` | ошибка в потоке | показывает ошибку и кнопку «Повторить» |
-
-`status` инструмента: `running` → `success` | `error`.
-
-## Правила
-
-1. Имя события всегда `message`, тип лежит в `data.type`. Парсер принимает и короткую
-   форму без `type`, подставляя его из имени события.
-2. Между событиями — пустая строка, это разделитель SSE. Переводы строк `\n` и
-   `\r\n` допустимы, несколько `data:`-строк склеиваются.
-3. Порядок: `tool_call` (если был вызов) → `delta`* → `citation`* → `done`.
-4. `done` закрывает поток; после него событий не бывает.
-5. Ошибки транспорта (503, 504, 502) приходят **не** как SSE-событие, а обычным
-   JSON-конвертом с кодом — фронт различает их по `response.ok`.
-
-## Что делает core
-
-- проксирует байты как есть, без разбора и переименования;
-- после каждого события вызывает `Flush()`;
-- выставляет `X-Accel-Buffering: no`, чтобы nginx не буферизовал поток;
-- пробрасывает клиентский `Authorization` в AI-сервис.
-
-## Ошибки до начала потока
-
-| Статус | Код | Что видит пользователь |
-|---|---|---|
-| 401 | `UNAUTHORIZED` | «Сессия истекла, войдите заново» |
-| 429 | `SERVICE_UNAVAILABLE` | «Слишком много запросов, попробуйте позже» |
-| 502 | `UPSTREAM_ERROR` | «Ассистент сейчас недоступен» |
-| 503 | `SERVICE_UNAVAILABLE` | демо-режим с плашкой |
-| 504 | `TIMEOUT` | «Ответ ассистента не успел прийти вовремя» |
