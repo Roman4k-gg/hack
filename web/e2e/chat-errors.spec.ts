@@ -1,5 +1,34 @@
 import { expect, test } from '@playwright/test';
 
+async function openChat(page: import('@playwright/test').Page) {
+    await page.route('**/api/v1/auth/login', async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                token: 'test-token',
+                token_type: 'Bearer',
+                expires_at: '2026-11-17T12:00:00Z',
+                user: {
+                    id: '22222222-2222-2222-2222-222222222224',
+                    email: 'dasha@demo.local',
+                    full_name: 'Дарья Соколова',
+                    role: 'intern',
+                    position: 'Стажёр-разработчик',
+                    team_name: 'Search',
+                    scopes: ['onboarding:plan:read', 'chat:use'],
+                },
+            }),
+        });
+    });
+
+    await page.goto('/login');
+    await page.getByLabel('Почта').fill('dasha@demo.local');
+    await page.getByRole('button', { name: 'Войти' }).click();
+    await page.getByRole('link', { name: 'Чат' }).click();
+    await page.waitForURL(/\/chat$/);
+}
+
 for (const scenario of [
     { status: 401, message: 'Сессия истекла. Войди заново.' },
     { status: 403, message: 'Для твоей роли чат недоступен.' },
@@ -17,7 +46,7 @@ for (const scenario of [
             }),
         );
 
-        await page.goto('/');
+        await openChat(page);
         await page.getByRole('textbox', {
             name: 'Сообщение',
             exact: true,
@@ -59,7 +88,7 @@ test('оборванный ответ сохраняется и допускае
         });
     });
 
-    await page.goto('/');
+    await openChat(page);
     const input = page.getByRole('textbox', {
         name: 'Сообщение',
         exact: true,
@@ -93,7 +122,7 @@ test('недоступность AI включает обозначенный д
         }),
     );
 
-    await page.goto('/');
+    await openChat(page);
     await page.getByRole('textbox', {
         name: 'Сообщение',
         exact: true,
