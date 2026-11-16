@@ -50,6 +50,10 @@ def with_stale_warning(answer: str, citations: dict[str, dict[str, Any]]) -> str
     return f"{answer.rstrip()}\n\n{STALE_TEXT}"
 
 
+def memory_key(user: User, conversation_id: str = "") -> str:
+    return f"{user.id}:{conversation_id}" if conversation_id else user.id
+
+
 def assistant_tool_message(text: str, calls: list[tuple[str, ToolCall]]) -> dict[str, Any]:
     return {
         "role": "assistant",
@@ -111,8 +115,8 @@ class Agent:
             run.add_response(response)
             return response
 
-    def _pending_context(self, user: User) -> list[str]:
-        action = self.pending.get(user.id)
+    def _pending_context(self, key: str) -> list[str]:
+        action = self.pending.get(key)
         if action is None:
             return []
         draft = json.dumps(action.draft, ensure_ascii=False)
@@ -129,7 +133,9 @@ class Agent:
         tools: dict[str, Tool],
         turn_id: str,
         tainted: bool = False,
+        key: str = "",
     ) -> ToolResult:
+        key = key or user.id
         tool = tools.get(call.name)
         is_action = tool is not None and (tool.requires_confirmation or bool(tool.confirmed_by))
         if tainted and is_action:
@@ -137,7 +143,7 @@ class Agent:
                 ok=False, error_code="INJECTION_SUSPECTED", error_message=TAINTED_TEXT
             )
         if tool is not None and tool.requires_confirmation:
-            action = self.pending.get(user.id)
+            action = self.pending.get(key)
             if action is None or action.tool != call.name or action.turn_id == turn_id:
                 return ToolResult(
                     ok=False,
@@ -146,12 +152,12 @@ class Agent:
                 )
             result = await self.registry.call(call.name, action.confirm_args(), user)
             if result.ok or result.error_code not in RETRYABLE_CODES:
-                self.pending.pop(user.id)
+                self.pending.pop(key)
             return result
 
         result = await self.registry.call(call.name, call.arguments, user)
         if tool is not None and tool.confirmed_by and result.ok and isinstance(result.data, dict):
-            self.pending.put(user.id, tool.confirmed_by, result.data, turn_id)
+            self.pending.put(key, tool.confirmed_by, result.data, turn_id)
             draft = {key: value for key, value in result.data.items() if key not in HIDDEN_FIELDS}
             return ToolResult(
                 ok=True,
@@ -167,7 +173,7 @@ class Agent:
                 await asyncio.sleep(self.stream_delay)
 
     async def run(
-        self, user: User, message: str, trace_id: str = ""
+        self, user: User, message: str, trace_id: str = "", conversation_id: str = ""
     ) -> AsyncIterator[dict[str, Any]]:
         run = AgentRun(
             trace_id=trace_id or uuid.uuid4().hex,
@@ -177,7 +183,7 @@ class Agent:
             message_length=len(message),
         )
         try:
-            async for event in self._run(user, message, run):
+            async for event in self._run(user, message, run, memory_key(user, conversation_id)):
                 yield event
         except Exception as exc:
             run.finish("error", type(exc).__name__)
@@ -185,16 +191,18 @@ class Agent:
         finally:
             run.log()
 
-    async def _run(self, user: User, message: str, run: AgentRun) -> AsyncIterator[dict[str, Any]]:
+    async def _run(
+        self, user: User, message: str, run: AgentRun, key: str
+    ) -> AsyncIterator[dict[str, Any]]:
         tools = {tool.name: tool for tool in self.registry.available(user)}
         specs = [tool.spec for tool in tools.values()]
         turn_id = uuid.uuid4().hex
         run.input_flags = find_injection(message)
-        extra = self._pending_context(user)
+        extra = self._pending_context(key)
         if run.input_flags:
             extra.append(INJECTION_NOTE)
         tainted = False
-        previous = self.history.messages(user.id)
+        previous = self.history.messages(key)
         run.history_messages = len(previous)
         messages: list[dict[str, Any]] = [
             build_system_message(user, self.prompt_version, today=self.today(), extra=extra),
@@ -217,7 +225,7 @@ class Agent:
                 sources = {} if handoff_offered else citations
                 answer = with_stale_warning(mask_pii(response.text), sources)
                 if not run.input_flags and not tainted:
-                    self.history.add(user.id, mask_pii(message), answer)
+                    self.history.add(key, mask_pii(message), answer)
                 async for event in self._stream_text(answer):
                     yield event
                 for item in sources.values():
@@ -235,7 +243,7 @@ class Agent:
             for call_id, call in calls:
                 yield sse.tool_call(call_id, call.name, "running")
                 started = run.clock()
-                result = await self._call_tool(call, user, tools, turn_id, tainted)
+                result = await self._call_tool(call, user, tools, turn_id, tainted, key)
                 result, flags = sanitize_result(result)
                 if flags:
                     tainted = True

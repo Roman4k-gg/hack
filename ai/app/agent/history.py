@@ -40,4 +40,9 @@ class ConversationStore:
         turns.append(Turn(user[:MAX_STORED_CHARS], assistant[:MAX_STORED_CHARS], self.clock()))
 
     def clear(self, user_id: str) -> None:
-        self._turns.pop(user_id, None)
+        for key in [key for key in self._turns if owned_by(key, user_id)]:
+            del self._turns[key]
+
+
+def owned_by(key: str, user_id: str) -> bool:
+    return key == user_id or key.startswith(f"{user_id}:")

@@ -3,6 +3,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.agent.history import owned_by
+
 HIDDEN_FIELDS = ("preview_id", "confirmation_token", "payload")
 
 
@@ -54,3 +56,7 @@ class PendingStore:
 
     def pop(self, user_id: str) -> None:
         self._items.pop(user_id, None)
+
+    def clear(self, user_id: str) -> None:
+        for key in [key for key in self._items if owned_by(key, user_id)]:
+            del self._items[key]

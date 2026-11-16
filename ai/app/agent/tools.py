@@ -13,6 +13,11 @@ from app.providers.base import ToolSpec
 NO_ARGS = {"type": "object", "properties": {}, "additionalProperties": False}
 
 
+HANDOFF_UNAVAILABLE_TEXT = (
+    "Передача вопросов наставнику пока не подключена в системе. Напиши наставнику напрямую."
+)
+
+
 class ToolError(Exception):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
@@ -361,7 +366,12 @@ async def create_handoff(user: User, args: dict[str, Any], core: CoreClient) -> 
         "context": str(args.get("context") or ""),
         "idempotency_key": idempotency_key,
     }
-    data = await core.post("/api/v1/handoffs", user, body)
+    try:
+        data = await core.post("/api/v1/handoffs", user, body)
+    except ToolError as exc:
+        if exc.code == "NOT_FOUND":
+            raise ToolError("NOT_FOUND", HANDOFF_UNAVAILABLE_TEXT) from exc
+        raise
     return ToolResult(
         ok=True,
         data={

@@ -4,6 +4,7 @@ import httpx
 import httpx2
 import pytest
 
+from app.agent import tools
 from app.agent.loop import Agent
 from app.agent.mcp_tools import MCPToolRegistry
 from app.agent.tools import CoreClient, ToolRegistry
@@ -122,6 +123,7 @@ async def test_create_handoff_requires_confirmation_and_maps_missing_endpoint(
     args = {"question": "Вопрос?", "idempotency_key": "k1"}
     unavailable = await registry.call("create_handoff", args, intern_with_requests)
     assert unavailable.error_code == "NOT_FOUND"
+    assert unavailable.error_message == tools.HANDOFF_UNAVAILABLE_TEXT
 
 
 @pytest.mark.parametrize(

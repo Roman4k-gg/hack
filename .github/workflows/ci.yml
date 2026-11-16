@@ -9,6 +9,7 @@ on:
       - 'Roman/**'
       - 'Katya/**'
       - 'Masha/**'
+      - 'Timokha/**'
   pull_request:
 
 permissions:

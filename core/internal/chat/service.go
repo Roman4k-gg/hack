@@ -70,7 +70,7 @@ type Stream struct {
 	Deadline    time.Time
 }
 
-func (s *Service) Stream(ctx context.Context, principal reqctx.Principal, authHeader, message string) (*Stream, error) {
+func (s *Service) Stream(ctx context.Context, principal reqctx.Principal, authHeader, message, conversationID string) (*Stream, error) {
 	message = strings.TrimSpace(message)
 	if message == "" {
 		return nil, ErrEmptyMessage
@@ -86,11 +86,15 @@ func (s *Service) Stream(ctx context.Context, principal reqctx.Principal, authHe
 		}
 	}
 
-	payload, err := json.Marshal(map[string]any{
+	body := map[string]any{
 		"message": message,
 		"user_id": principal.UserID,
 		"role":    principal.Role,
-	})
+	}
+	if conversationID != "" {
+		body["conversation_id"] = conversationID
+	}
+	payload, err := json.Marshal(body)
 	if err != nil {
 		return nil, fmt.Errorf("chat: marshal request: %w", err)
 	}
