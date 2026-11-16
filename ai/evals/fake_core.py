@@ -375,6 +375,31 @@ class FakeCore:
                 "bundle": body.get("bundle", "intern"),
                 "items": ACCESS_ITEMS,
             }
+        if path == "/api/v1/requests/absence" and body.get("confirmation_token"):
+            return {
+                "request_id": "req-absence",
+                "kind": "absence",
+                "title": "Отгул",
+                "status": "pending",
+                "external_id": "ABS-101",
+                "approver": {"full_name": "Ольга Кузнецова"},
+                "next_step": "Заявка ушла руководителю",
+            }
+        if path == "/api/v1/requests/access" and body.get("confirmation_token"):
+            return {
+                "requests": [
+                    {"request_id": f"req-{index}", "system": item["system"], "status": "pending"}
+                    for index, item in enumerate(ACCESS_ITEMS)
+                ],
+                "next_step": "Заявки ушли наставнику и в IT-отдел",
+            }
+        if path == "/api/v1/handoffs" and body.get("question") and body.get("idempotency_key"):
+            return {
+                "request_id": "req-handoff",
+                "status": "pending",
+                "external_id": "HND-101",
+                "mentor": {"full_name": "Пётр Иванов"},
+            }
         if path == "/api/v1/requests" and method == "GET":
             return {
                 "items": [

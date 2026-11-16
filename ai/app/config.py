@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     log_level: str = "info"
     log_json: bool = True
     rate_limit_per_minute: int = 20
+    history_turns: int = 5
+    history_ttl: float = 1800.0
 
 
 @lru_cache

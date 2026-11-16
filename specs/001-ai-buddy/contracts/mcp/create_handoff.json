@@ -1,0 +1,50 @@
+{
+  "name": "create_handoff",
+  "description": "Отправляет наставнику вопрос из последнего черновика. Вызывай только если пользователь в новом сообщении явно подтвердил. Аргументы не нужны.",
+  "kind": "write+confirmation",
+  "scope": "request:self",
+  "confirmed_by": null,
+  "requires_confirmation": true,
+  "annotations": {
+    "read_only": false,
+    "idempotent": true
+  },
+  "llm_parameters": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "mcp_input_schema": {
+    "type": "object",
+    "properties": {
+      "question": {
+        "title": "Question",
+        "type": "string"
+      },
+      "idempotency_key": {
+        "title": "Idempotency Key",
+        "type": "string"
+      },
+      "context": {
+        "default": "",
+        "title": "Context",
+        "type": "string"
+      },
+      "preview_id": {
+        "default": "",
+        "title": "Preview Id",
+        "type": "string"
+      },
+      "confirmation_token": {
+        "default": "",
+        "title": "Confirmation Token",
+        "type": "string"
+      }
+    },
+    "required": [
+      "question",
+      "idempotency_key"
+    ],
+    "title": "create_handoffArguments"
+  }
+}

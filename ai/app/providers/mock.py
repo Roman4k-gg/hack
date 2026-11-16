@@ -71,13 +71,27 @@ CONFIRM_WORDS = {
     "верно",
 }
 DECLINE_WORDS = ("нет", "отмен", "не надо", "передумал", "стоп")
+HANDOFF_WORDS = (
+    "передай наставник",
+    "передать наставник",
+    "спроси наставник",
+    "спроси у наставник",
+    "задай вопрос наставник",
+    "эскалир",
+)
+NOT_FOUND_SHORT_TEXT = "Не нашёл ответа в базе знаний."
+HANDOFF_NEXT_TEXT = "Наставник ответит в чате или на почте."
+HANDOFF_UNAVAILABLE_TEXT = (
+    "Передача вопросов наставнику пока не подключена в системе. "
+    "Напиши наставнику напрямую — вопрос уже сформулирован выше."
+)
 PENDING_PATTERN = re.compile(r"Инструмент для подтверждения: (\w+)")
 
 ASK_DATE_TEXT = (
     "На какую дату оформить? Напиши, например: «отгул в пятницу», "
     "«отгул 20.11» или «отпуск с 20 по 24 ноября»."
 )
-DECLINED_TEXT = "Хорошо, заявку не отправляю. Если передумаешь — просто напиши даты ещё раз."
+DECLINED_TEXT = "Хорошо, ничего не отправляю. Если передумаешь — просто напиши ещё раз."
 CONFIRMATION_TEXT = (
     "Сначала покажу черновик заявки, а отправлю только после твоего подтверждения. "
     "Напиши ещё раз, что нужно оформить: отгул с датами или пакет доступов."
@@ -99,6 +113,16 @@ def _last_user_index(messages: list[dict[str, Any]]) -> int:
         if messages[index].get("role") == "user":
             return index
     return -1
+
+
+def _previous_exchange(messages: list[dict[str, Any]], user_index: int) -> tuple[str, str]:
+    earlier = [message for message in messages[:user_index] if message.get("role") != "system"]
+    if len(earlier) < 2:
+        return "", ""
+    question, answer = earlier[-2], earlier[-1]
+    if question.get("role") != "user" or answer.get("role") != "assistant":
+        return "", ""
+    return str(question.get("content") or ""), str(answer.get("content") or "")
 
 
 def _tool_results(messages: list[dict[str, Any]], start: int) -> list[tuple[str, dict[str, Any]]]:
@@ -256,8 +280,28 @@ def _requests_text(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _error_text(error: dict[str, Any]) -> str:
+def _handoff_preview_text(preview: dict[str, Any]) -> str:
+    question = (preview.get("draft") or {}).get("question", "")
+    return (
+        f"Передам наставнику вопрос:\n\n> {question}\n\n"
+        "Отправить? Напиши «да» — или «нет», если не нужно."
+    )
+
+
+def _handoff_created_text(result: dict[str, Any]) -> str:
+    lines = ["Вопрос передан наставнику ✅"]
+    if result.get("mentor"):
+        lines.append(f"- **Наставник:** {result['mentor']}")
+    if result.get("external_id"):
+        lines.append(f"- **Номер:** {result['external_id']}")
+    lines.append(f"\n{result.get('next_step') or HANDOFF_NEXT_TEXT}")
+    return "\n".join(lines)
+
+
+def _error_text(error: dict[str, Any], name: str = "") -> str:
     code = error.get("code")
+    if name == "create_handoff" and code == "NOT_FOUND":
+        return HANDOFF_UNAVAILABLE_TEXT
     if code == "FORBIDDEN":
         return FORBIDDEN_TEXT
     if code == "CONFIRMATION_REQUIRED":
@@ -271,7 +315,7 @@ def _error_text(error: dict[str, Any]) -> str:
 
 def _answer_from_tool(name: str, payload: dict[str, Any]) -> str:
     if not payload.get("ok"):
-        return _error_text(payload.get("error") or {})
+        return _error_text(payload.get("error") or {}, name)
     result = payload.get("result") or {}
     builders = {
         "get_onboarding_plan": _plan_text,
@@ -282,6 +326,8 @@ def _answer_from_tool(name: str, payload: dict[str, Any]) -> str:
         "get_my_requests": _requests_text,
         "preview_access_bundle": _access_preview_text,
         "create_access_requests": _access_created_text,
+        "preview_handoff": _handoff_preview_text,
+        "create_handoff": _handoff_created_text,
     }
     builder = builders.get(name)
     return builder(result) if builder else FALLBACK_TEXT
@@ -328,14 +374,6 @@ class MockProvider:
         if user_index < 0:
             return LLMResponse(text=FALLBACK_TEXT, model="mock")
 
-        results = _tool_results(messages, user_index)
-        if results:
-            name, payload = results[-1]
-            return LLMResponse(text=_answer_from_tool(name, payload), model="mock")
-
-        if _flagged(messages):
-            return LLMResponse(text=INJECTION_TEXT, model="mock")
-
         question = str(messages[user_index].get("content") or "").strip()
         lowered = question.lower()
         available = {tool.name for tool in tools}
@@ -345,12 +383,40 @@ class MockProvider:
                 return None
             return LLMResponse(tool_calls=[ToolCall(id="", name=name, arguments=arguments or {})])
 
+        results = _tool_results(messages, user_index)
+        if results:
+            name, payload = results[-1]
+            found_nothing = (
+                name == "search_knowledge"
+                and payload.get("ok")
+                and not (payload.get("result") or {}).get("items")
+            )
+            handoff = call("preview_handoff", {"question": question}) if found_nothing else None
+            if handoff:
+                return handoff
+            text = _answer_from_tool(name, payload)
+            if name == "preview_handoff" and any(n == "search_knowledge" for n, _ in results):
+                text = f"{NOT_FOUND_SHORT_TEXT}\n\n{text}"
+            return LLMResponse(text=text, model="mock")
+
+        if _flagged(messages):
+            return LLMResponse(text=INJECTION_TEXT, model="mock")
+
         words = set(re.findall(r"[a-zа-яё]+", lowered))
         pending_tool = _pending_tool(messages)
+        asked_before, answered_before = _previous_exchange(messages, user_index)
+        continues_absence = answered_before == ASK_DATE_TEXT and bool(
+            find_dates(question, today_from_system(messages))
+        )
         if pending_tool and words & CONFIRM_WORDS and not _contains(lowered, DECLINE_WORDS):
             response = call(pending_tool)
         elif pending_tool and _contains(lowered, DECLINE_WORDS):
             return LLMResponse(text=DECLINED_TEXT, model="mock")
+        elif continues_absence:
+            response = self._absence(f"{asked_before} {question}", messages, call)
+        elif _contains(lowered, HANDOFF_WORDS):
+            to_send = asked_before if asked_before and len(words) <= 5 else question
+            response = call("preview_handoff", {"question": to_send})
         elif _contains(lowered, PROFILE_WORDS):
             response = call("get_my_profile")
         elif _contains(lowered, REQUEST_WORDS):

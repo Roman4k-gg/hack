@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app import sse
+from app.agent.history import ConversationStore
 from app.agent.loop import Agent
 from app.agent.mcp_tools import MCPToolRegistry
 from app.agent.tools import CoreClient, ToolBackend, ToolRegistry
@@ -50,6 +51,7 @@ def get_agent() -> Agent:
         stream_delay=settings.mock_stream_delay if settings.llm_mode == "mock" else 0.0,
         llm_retries=settings.llm_retries,
         llm_retry_delay=settings.llm_retry_delay,
+        history=ConversationStore(max_turns=settings.history_turns, ttl=settings.history_ttl),
     )
 
 
@@ -106,3 +108,12 @@ async def chat_stream(
             "X-Trace-Id": trace_id,
         },
     )
+
+
+@router.delete("/api/v1/chat/history", status_code=204)
+async def clear_history(
+    user: Annotated[User, Depends(current_user)],
+    agent: Annotated[Agent, Depends(get_agent)],
+) -> None:
+    agent.history.clear(user.id)
+    agent.pending.pop(user.id)

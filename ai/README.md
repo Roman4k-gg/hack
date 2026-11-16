@@ -28,6 +28,7 @@ uv run uvicorn app.main:app --reload --port 8000
 | ai | GET | `/healthz` | liveness |
 | ai | GET | `/readyz` | готовность, режим LLM, версия промпта |
 | ai | POST | `/api/v1/chat/stream` | SSE-ответ чата, формат — `docs/api-contract.md` §5 |
+| ai | DELETE | `/api/v1/chat/history` | Сбросить историю диалога и черновик |
 | mcp | GET | `/healthz` | liveness |
 | mcp | POST | `/mcp` | MCP Streamable HTTP |
 
@@ -43,6 +44,8 @@ uv run uvicorn app.main:app --reload --port 8000
 | `get_my_requests` | `GET /api/v1/requests` | `request:self` |
 | `preview_access_bundle` | `POST /api/v1/requests/access/preview` | `access:self` |
 | `create_access_requests` | `POST /api/v1/requests/access` | `access:self:write` |
+| `preview_handoff` | — (черновик в AI) | `request:self` |
+| `create_handoff` | `POST /api/v1/handoffs` (ждёт core) | `request:self` |
 
 Действия идут в два шага: `preview_*` возвращает черновик, токен подтверждения агент прячет
 от модели. `create_*` выполняется только в следующем сообщении после явного «да».
@@ -56,7 +59,7 @@ uv run uvicorn app.main:app --reload --port 8000
 
 Остальные переменные — в `app/config.py`: `CORE_URL`, `MCP_URL`, `JWT_SECRET`, `LLM_MODEL`,
 `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_RETRIES`, `LLM_RETRY_DELAY`, `MAX_TOOL_ITERATIONS`,
-`TOOL_TIMEOUT`, `LOG_LEVEL`, `LOG_JSON`, `RATE_LIMIT_PER_MINUTE`.
+`TOOL_TIMEOUT`, `LOG_LEVEL`, `LOG_JSON`, `RATE_LIMIT_PER_MINUTE`, `HISTORY_TURNS`, `HISTORY_TTL`.
 
 ## Guardrails
 

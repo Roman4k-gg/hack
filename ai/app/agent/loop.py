@@ -7,6 +7,7 @@ from datetime import date
 from typing import Any
 
 from app import sse
+from app.agent.history import ConversationStore
 from app.agent.pending import HIDDEN_FIELDS, PendingStore
 from app.agent.prompts import build_system_message
 from app.agent.run_log import AgentRun
@@ -71,6 +72,7 @@ class Agent:
         llm_retries: int = 1,
         llm_retry_delay: float = 0.0,
         today: Callable[[], date] = date.today,
+        history: ConversationStore | None = None,
     ) -> None:
         self.provider = provider
         self.registry = registry
@@ -81,6 +83,7 @@ class Agent:
         self.llm_retries = llm_retries
         self.llm_retry_delay = llm_retry_delay
         self.today = today
+        self.history = history if history is not None else ConversationStore()
 
     async def _complete(
         self, messages: list[dict[str, Any]], specs: list[ToolSpec], run: AgentRun
@@ -182,8 +185,11 @@ class Agent:
         if run.input_flags:
             extra.append(INJECTION_NOTE)
         tainted = False
+        previous = self.history.messages(user.id)
+        run.history_messages = len(previous)
         messages: list[dict[str, Any]] = [
             build_system_message(user, self.prompt_version, today=self.today(), extra=extra),
+            *previous,
             {"role": "user", "content": message},
         ]
         citations: dict[str, dict[str, str]] = {}
@@ -198,7 +204,10 @@ class Agent:
                 return
 
             if not response.tool_calls:
-                async for event in self._stream_text(mask_pii(response.text)):
+                answer = mask_pii(response.text)
+                if not run.input_flags and not tainted:
+                    self.history.add(user.id, mask_pii(message), answer)
+                async for event in self._stream_text(answer):
                     yield event
                 for item in citations.values():
                     yield sse.citation(item["id"], item["title"], item.get("url", ""))

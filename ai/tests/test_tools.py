@@ -92,6 +92,8 @@ async def test_tools_filtered_by_scope():
         "get_my_requests",
         "preview_access_bundle",
         "create_access_requests",
+        "preview_handoff",
+        "create_handoff",
     }
     result = await registry.call("get_onboarding_plan", {}, no_plan)
     assert result.error_code == "FORBIDDEN"

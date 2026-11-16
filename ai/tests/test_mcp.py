@@ -94,9 +94,11 @@ async def test_server_lists_tools_with_annotations():
             "get_my_requests",
             "preview_access_bundle",
             "create_access_requests",
+            "preview_handoff",
+            "create_handoff",
         }
         writers = {name for name, tool in tools.items() if not tool.annotations.read_only_hint}
-        assert writers == {"create_absence_request", "create_access_requests"}
+        assert writers == {"create_absence_request", "create_access_requests", "create_handoff"}
         assert "required" not in tools["preview_access_bundle"].input_schema
         assert tools["search_knowledge"].input_schema["required"] == ["query"]
         assert tools["preview_absence_request"].input_schema["required"] == ["date_from"]

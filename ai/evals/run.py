@@ -43,6 +43,7 @@ class Case:
     contains: list[str] = field(default_factory=list)
     not_contains: list[str] = field(default_factory=list)
     not_called: list[str] = field(default_factory=list)
+    history: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -140,9 +141,14 @@ async def run_case(case: Case, provider: LLMProvider) -> CaseResult:
     client = httpx.AsyncClient(transport=httpx.MockTransport(core))
     backend = RecordingBackend(ToolRegistry(CoreClient("http://core.eval", client=client)))
     agent = Agent(provider, backend, today=lambda: EVAL_TODAY)
+    user = user_for(case.person)
+    for earlier in case.history:
+        async for _ in agent.run(user, earlier, trace_id=case.id):
+            pass
+    backend.calls.clear()
     observed = Observed()
     started = time.perf_counter()
-    async for event in agent.run(user_for(case.person), case.question, trace_id=case.id):
+    async for event in agent.run(user, case.question, trace_id=case.id):
         if event["type"] == "delta":
             observed.answer += event["text"]
         elif event["type"] == "citation":
