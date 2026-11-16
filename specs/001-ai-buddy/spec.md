@@ -169,7 +169,7 @@ JSON Schema инструментов — в [`contracts/mcp/`](contracts/mcp).
 | FR-15 | Не больше `RATE_LIMIT_PER_MINUTE` (20) сообщений в минуту на пользователя, иначе `429`. |
 | FR-16 | `LLM_MODE=mock` — сценарный mock без ключа и сети: все 4 сценария работают на демо. |
 | FR-17 | Агент помнит последние `HISTORY_TURNS` (5) пар «вопрос — ответ» пользователя 30 минут и передаёт их модели; ходы с подозрением на injection и неудачные ходы не запоминаются; `DELETE /api/v1/chat/history` очищает историю и черновик. |
-| FR-18 | Если ответа нет в базе или пользователь просит «передай наставнику» — агент готовит черновик вопроса (`preview_handoff`, без вызова core) и после «да» в следующем сообщении отправляет его в core (`create_handoff` → `POST /api/v1/handoffs`). Если core не поддерживает handoff (404) — честный текст без выдуманного статуса. |
+| FR-18 | Если ответа нет в базе или пользователь просит «передай наставнику» — агент готовит черновик вопроса (`preview_handoff`, без вызова core) и после «да» в следующем сообщении отправляет его в core (`create_handoff` → `POST /api/v1/handoffs`). Если core не поддерживает handoff (404) — честный текст без выдуманного статуса. Если в ответе предложен вопрос наставнику, источники не показываются: ответа в них нет. |
 
 ## 5. Трассировка: требование → тест
 
@@ -195,7 +195,7 @@ JSON Schema инструментов — в [`contracts/mcp/`](contracts/mcp).
 | FR-15 | `tests/test_guardrails.py::test_chat_rate_limit_returns_429` |
 | FR-16 | `tests/test_demo_scenarios.py::test_next_step_scenario`, `tests/test_evals.py::test_golden_set_passes_in_mock_mode` |
 | FR-17 | `tests/test_history.py::test_agent_sends_previous_turns_to_model`, `tests/test_history.py::test_agent_does_not_remember_risky_or_failed_turns`, `tests/test_history.py::test_store_forgets_old_turns_and_limits_size`, `tests/test_history.py::test_clear_history_endpoint` |
-| FR-18 | `tests/test_handoff.py::test_preview_handoff_builds_local_draft`, `tests/test_handoff.py::test_agent_sends_handoff_only_in_next_turn`, `tests/test_handoff.py::test_mock_offers_handoff_when_nothing_found`, `tests/test_handoff.py::test_mock_explains_when_core_has_no_handoffs`, `tests/test_handoff.py::test_handoff_flow_over_mcp` |
+| FR-18 | `tests/test_handoff.py::test_preview_handoff_builds_local_draft`, `tests/test_handoff.py::test_agent_sends_handoff_only_in_next_turn`, `tests/test_handoff.py::test_mock_offers_handoff_when_nothing_found`, `tests/test_handoff.py::test_mock_explains_when_core_has_no_handoffs`, `tests/test_handoff.py::test_handoff_flow_over_mcp`, `tests/test_real_llm_setup.py::test_no_citations_when_question_goes_to_mentor` |
 | Сценарий 1 | `tests/test_demo_scenarios.py::test_next_step_scenario`, `tests/test_mock_provider.py::test_mock_answers_from_plan` |
 | Сценарий 2 | `tests/test_demo_scenarios.py::test_jira_question_scenario`, `tests/test_demo_scenarios.py::test_unknown_question_suggests_mentor`, `tests/test_handoff.py::test_mock_offers_handoff_when_nothing_found`, `tests/test_real_llm_setup.py::test_stale_warning_added_by_agent`, `tests/test_evals.py::test_golden_set_passes_in_mock_mode` |
 | Сценарий 3 | `tests/test_access.py::test_access_demo_scenario`, `tests/test_access.py::test_mock_separates_access_bundle_from_how_to_question`, `tests/test_access.py::test_access_flow_over_mcp` |
